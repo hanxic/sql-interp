@@ -8,23 +8,93 @@ import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 
-type Name = String
+
+{-
+
+Commands to Add Later:
+  - Alter Table and [add, drop]
+  - Update and [set]
+  - Create and [table, index, database]
+  - Having for GroupBy clauses
+  - Joins
+
+Grammar Source: https://www.dataquest.io/blog/sql-commands/
+Optimization Source: https://www.analyticsvidhya.com/blog/2021/10/a-detailed-guide-on-sql-query-optimization/
+Relational Algebra: https://byjus.com/gate/relational-algebra-in-dbms-notes/#:~:text=Calculus%20(or%20DRC)-,What%20is%20Relational%20Algebra%20in%20DBMS%3F,unary%20operator%20can%20be%20used
+Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/EquivalenceRules.pdf
+
+Wyatt Jobs:
+  - Read up on LuStepper, relational algebra, sql query optimization
+  - Given command, update the TableMap
+  - Define TableMap and ops [insert, append, singleton, empty, delete, search?]
+  - Stretch loose optimization stuff
+      - remove duplicates
+      - search for col name -> if name never shows up delete col
+      - parallelize if col ops are independent of other ops
+      - flatten nested select ops
+      
+Timeline:
+  - TA Checkin #1 wed-fri?
+      - parser
+      - TableMap datastructure
+      - interpretation
+      - TESTING for everything (arbitrary + some unit tests)
+      - optimization definitions??
+
+
+-}
 
 data Command = Command
   { verb :: Verb, -- none empty
     from :: Command,
-    wh :: Statement
+    wh :: ConditionalStatement
   }
 
 data Verb
   = Select [Expression]
   | Insert [Expression]
-  | Delete [Expression]
+  | Delete
+  | Drop
+--  | Create [FieldName]
+--  | Update [Expression]
+--  | AlterTable [AlterTableCommand]
 
-data Statement
+--data AlterTableCommand = Add | Drop
+
+data DType
+  = StringType
+  | IntType
+  | BoolType
+  | NullType
+
+type TableName = String
+type FieldName = (String, DType)
+
+data VerbStatement
+  = Distinct Expression
+  | Into Expression
+  | Expr Expression
+  | As Expression Expression
+  | Set FieldName Expression
+
+data AggregateFunction
+  = Count
+  | Sum
+  | Min
+  | Max
+  | Mean
+  | Median
+
+data Order = Asc | Desc
+
+data ConditionalStatement
   = GroupBy
-  | OrderBy
   | Join
+  | OrderBy Expression Order
+  | Top Expression
+  | Offset Expression
+  | Fetch Expression
+
 
 data Expression
   = Var Var
@@ -49,6 +119,15 @@ data Bop
   | Lt
   | Le
   | Concat
+  | And
+  | Or
+  | Like
+
+data Top
+  = Between
+
+data Vop
+  = In
 
 type Var = Name
 
@@ -56,6 +135,7 @@ data Value
   = IntVal Int
   | BoolVal Bool
   | StringVal String
+  | Null
 
 {-
 What do we want to cover?
