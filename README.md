@@ -1,38 +1,7 @@
-# project-cis5520
+# CIS 5520 Final Project
 
-This is an "Empty project" for Haskell. It is configured in the same way as
-the lecture demo and homework assignments for CIS 5520, but contains no
-code. Feel free to use this repository for experimentation!
+We propose creating a compiler for a domain-specific language embedded in Structured Query Language (SQL) using functional goodness of the Haskell. Our project aims to achieve the following goals:
 
-If you want to change the name of this project, look for all occurrences of
-`project-cis5520` in the `project-cis5520.cabal` file and in the `hie.yaml` 
-file. (And change the name of the cabal file to match your new name!)
-
-## Module organization
-
-Haskell packages typically divide their source code into three separate places:
-
-  - The bulk of your code should be developed as a reusable library in 
-    modules in the `src` directory. We've created [Lib.hs](src/Lib.hs) 
-    for you to get started. You can add additional modules here.
-  
-  - The entry point for your executable is in [Main.hs](app/Main.hs). 
-  
-  - All of your test cases should be in [the test directory](test/Spec.hs).
-
-## Building, running, and testing
-
-This project compiles with `stack build`. 
-You can run the main executable with `stack run`.
-You can run the tests with `stack test`. 
-
-Finally, you can start a REPL with `stack ghci`.
-
-## Importing additional libraries
-
-This project is designed to run with stackage: you can easily use any library
-in https://www.stackage.org/lts-21.6 by adding an entry to the
-`build-depends` list of the `common-stanza` in the cabal file. If you want to
-use a library that is not on stackage, you'll need to update the common-stanza
-*and* add information to `stack.yaml` about where to find that library.
-
+1. Build a SQL-like language that will facilitate the query process for all users, especially beginner users: Compared to R (tidyverse) and Python (pandas), SQL has a more intuitive syntax. This project plans to leverage the intuitiveness of SQL syntax in creating a easy-to-understand domain-specific language for database queries.
+2. Provide a query optimization library with property-based testing checks: The project will also provide a simple library that, given the abstract syntax tree of our language, can perform certain query optimization such as filtering and avoiding selecting unnecessary columns / rows to improve simple optimization. The optimization library is expected to be tested using QuickCheck.
+3. Allow local compilation and execution of queries: the project aims to complete the compilation and execution process locally. That is, instead of using online notebook or uploading scripts to database, this project aims to parse CSV files, parse and compile SQL-like scripts, perform query optimization, and return the result of queries entirely offline. While this may result in the limitation of the size of the table, this compiler will ensure the user's to be free from any database bugs or internet connection problem.
