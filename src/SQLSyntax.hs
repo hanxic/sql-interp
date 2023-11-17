@@ -10,11 +10,16 @@ import Test.QuickCheck qualified as QC
 
 type Name = String
 
-data Query = Query
-  { elect :: [Expression], -- none empty
-    from :: Query,
+data Command = Command
+  { verb :: Verb, -- none empty
+    from :: Command,
     wh :: Statement
   }
+
+data Verb
+  = Select [Expression]
+  | Insert [Expression]
+  | Delete [Expression]
 
 data Statement
   = GroupBy
