@@ -15,7 +15,13 @@ class PP a where
   pp :: a -> Doc
 
 pretty :: (PP a) => a -> String
-pretty = undefined
+pretty = PP.render . pp
+
+oneLine :: (PP a) => a -> String
+oneLine = PP.renderStyle (PP.style {PP.mode = PP.OneLineMode}) . pp
+
+instance PP Uop where
+  pp = undefined
 
 instance PP Value where
   pp = undefined
