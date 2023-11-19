@@ -44,21 +44,15 @@ data SelectCommand = SelectCommand
   }
   deriving (Eq, Show)
 
-data DType
-  = StringType
-  | IntType
-  | BoolType
-  | NullType
+data TableExpression
+  = TableName Expression
+  | TableAlias Expression Var
   deriving (Eq, Show)
 
-data DValue
-  = IntVal Int
-  | BoolVal Bool
-  | StringVal String
-  | Null
-  deriving (Eq, Show, Ord)
-
-type Name = String
+data ColumnStyle
+  = Distinct
+  | All
+  deriving (Eq, Show)
 
 data FromExpression
   = TableExpression Expression
@@ -73,28 +67,18 @@ data JoinStyle
   | OuterJoin
   deriving (Eq, Show, Enum, Bounded)
 
-data TableExpression
-  = TableName Expression
-  | TableAlias Expression Var
+data Expression
+  = Var Var
+  | Value DValue
+  | Op1 Uop Expression
+  | Op2 Expression Bop Expression
+  | Fun Function Expression
+  | Order Expression OrderType
   deriving (Eq, Show)
 
-data ColumnStyle
-  = Distinct
-  | All
-  deriving (Eq, Show)
-
-data OrderType
-  = ASC
-  | DESC
-  | NULL
-  | FIRST
-  | LAST
-  deriving (Eq, Show)
-
-data Command
-  = Select
-  | Create
-  | Drop
+data Var
+  = Name Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
+  | QuotedName Name -- Quoted, can be anything
   deriving (Eq, Show)
 
 data Uop
@@ -118,20 +102,6 @@ data Bop
   | Like
   deriving (Eq, Show, Enum, Bounded)
 
-data Expression
-  = Var Var
-  | Value DValue
-  | Op1 Uop Expression
-  | Op2 Expression Bop Expression
-  | Fun Function Expression
-  | Order Expression OrderType
-  deriving (Eq, Show)
-
-data Var
-  = Name Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
-  | QuotedName Name -- Quoted, can be anything
-  deriving (Eq, Show)
-
 data Function
   = Avg
   | Count
@@ -141,6 +111,30 @@ data Function
   | Len
   | Lower
   | Upper
+  deriving (Eq, Show)
+
+data DType
+  = StringType
+  | IntType
+  | BoolType
+  | NullType
+  deriving (Eq, Show)
+
+data DValue
+  = IntVal Int
+  | BoolVal Bool
+  | StringVal String
+  | Null
+  deriving (Eq, Show, Ord)
+
+type Name = String
+
+data OrderType
+  = ASC
+  | DESC
+  | NULL
+  | FIRST
+  | LAST
   deriving (Eq, Show)
 
 {-
