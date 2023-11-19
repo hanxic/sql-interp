@@ -15,6 +15,11 @@ data Query
 
 -- **** Section for DeleteCommand ****
 
+{- Awesome grammar source: https://forcedotcom.github.io/phoenix/
+Grammar Source: https://www.dataquest.io/blog/sql-commands/
+Optimization Source: https://www.analyticsvidhya.com/blog/2021/10/a-detailed-guide-on-sql-query-optimization/
+Relational Algebra: https://byjus.com/gate/relational-algebra-in-dbms-notes/#:~:text=Calculus%20(or%20DRC)-,What%20is%20Relational%20Algebra%20in%20DBMS%3F,unary%20operator%20can%20be%20used
+Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/EquivalenceRules.pdf -}
 data DeleteCommand = DeleteCommand
   { from :: FromExpression,
     wh :: Maybe [Expression]
