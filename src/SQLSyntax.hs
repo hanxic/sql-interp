@@ -49,12 +49,14 @@ data Command = Command
     from :: Command,
     wh :: ConditionalStatement
   }
+  deriving (Eq, Show)
 
 data Verb
   = Select [Expression]
   | Insert [Expression]
   | Delete
   | Drop
+  deriving (Eq, Show)
 
 --  | Create [FieldName]
 --  | Update [Expression]
@@ -67,6 +69,7 @@ data DType
   | IntType
   | BoolType
   | NullType
+  deriving (Eq, Show)
 
 type TableName = String
 
@@ -78,6 +81,7 @@ data VerbStatement
   | Expr Expression
   | As Expression Expression
   | Set FieldName Expression
+  deriving (Eq, Show)
 
 data AggregateFunction
   = Count
@@ -86,8 +90,10 @@ data AggregateFunction
   | Max
   | Mean
   | Median
+  deriving (Eq, Show, Enum)
 
 data Order = Asc | Desc
+  deriving (Eq, Show)
 
 data ConditionalStatement
   = GroupBy
@@ -96,17 +102,20 @@ data ConditionalStatement
   | Top Expression
   | Offset Expression
   | Fetch Expression
+  deriving (Eq, Show)
 
 data Expression
   = Var Var
   | Value Value
   | Op1 Uop Expression
   | Op2 Expression Bop Expression
+  deriving (Eq, Show)
 
 data Uop
   = Neg
   | Not
   | Len
+  deriving (Eq, Show, Enum, Bounded)
 
 data Bop
   = Plus
@@ -123,12 +132,15 @@ data Bop
   | And
   | Or
   | Like
+  deriving (Eq, Show, Enum, Bounded)
 
 data Top
   = Between
+  deriving (Eq, Show)
 
 data Vop
   = In
+  deriving (Eq, Show)
 
 type Var = Name
 
@@ -137,6 +149,7 @@ data Value
   | BoolVal Bool
   | StringVal String
   | Null
+  deriving (Eq, Show, Ord)
 
 {-
 What do we want to cover?
