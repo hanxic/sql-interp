@@ -8,7 +8,6 @@ import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 
-
 {-
 
 Commands to Add Later:
@@ -32,7 +31,7 @@ Wyatt Jobs:
       - search for col name -> if name never shows up delete col
       - parallelize if col ops are independent of other ops
       - flatten nested select ops
-      
+
 Timeline:
   - TA Checkin #1 wed-fri?
       - parser
@@ -41,8 +40,9 @@ Timeline:
       - TESTING for everything (arbitrary + some unit tests)
       - optimization definitions??
 
-
 -}
+
+type Name = String
 
 data Command = Command
   { verb :: Verb, -- none empty
@@ -55,11 +55,12 @@ data Verb
   | Insert [Expression]
   | Delete
   | Drop
+
 --  | Create [FieldName]
 --  | Update [Expression]
 --  | AlterTable [AlterTableCommand]
 
---data AlterTableCommand = Add | Drop
+-- data AlterTableCommand = Add | Drop
 
 data DType
   = StringType
@@ -68,6 +69,7 @@ data DType
   | NullType
 
 type TableName = String
+
 type FieldName = (String, DType)
 
 data VerbStatement
@@ -94,7 +96,6 @@ data ConditionalStatement
   | Top Expression
   | Offset Expression
   | Fetch Expression
-
 
 data Expression
   = Var Var
