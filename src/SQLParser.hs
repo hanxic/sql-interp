@@ -17,14 +17,8 @@ prop_roundtrip_val v = P.parse valueP (SPP.pretty v) == Right v
 prop_roundtrip_exp :: Expression -> Bool
 prop_roundtrip_exp e = P.parse expP (SPP.pretty e) == Right e
 
-prop_roundtrip_stat :: Command -> Bool
-prop_roundtrip_stat s = P.parse commandP (SPP.pretty s) == Right s
-
 valueP :: Parser DValue
 valueP = undefined
 
 expP :: Parser Expression
 expP = undefined
-
-commandP :: Parser Command
-commandP = undefined

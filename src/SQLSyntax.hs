@@ -100,6 +100,7 @@ data Bop
   | And
   | Or
   | Like
+  | Is
   deriving (Eq, Show, Enum, Bounded)
 
 data Function
@@ -124,7 +125,7 @@ data DValue
   = IntVal Int
   | BoolVal Bool
   | StringVal String
-  | Null
+  | NullVal
   deriving (Eq, Show, Ord)
 
 type Name = String
