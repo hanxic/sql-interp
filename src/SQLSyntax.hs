@@ -4,65 +4,40 @@ import Control.Monad (mapM_)
 import Data.Char qualified as Char
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Sequence.Internal.Sorting (Queue (Q))
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 
-{-
+data Query
+  = SelectQuery SelectCommand
+  | DeleteQuery DeleteCommand
 
-Commands to Add Later:
-  - Alter Table and [add, drop]
-  - Update and [set]
-  - Create and [table, index, database]
-  - Having for GroupBy clauses
-  - Joins
+-- **** Section for DeleteCommand ****
 
-Grammar Source: https://www.dataquest.io/blog/sql-commands/
-Optimization Source: https://www.analyticsvidhya.com/blog/2021/10/a-detailed-guide-on-sql-query-optimization/
-Relational Algebra: https://byjus.com/gate/relational-algebra-in-dbms-notes/#:~:text=Calculus%20(or%20DRC)-,What%20is%20Relational%20Algebra%20in%20DBMS%3F,unary%20operator%20can%20be%20used
-Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/EquivalenceRules.pdf
+data DeleteCommand = DeleteCommand
+  { from :: FromExpression,
+    wh :: Maybe [Expression]
+  }
 
-Wyatt Jobs:
-  - Read up on LuStepper, relational algebra, sql query optimization
-  - Given command, update the TableMap
-  - Define TableMap and ops [insert, append, singleton, empty, delete, search?]
-  - Stretch loose optimization stuff
-      - remove duplicates
-      - search for col name -> if name never shows up delete col
-      - parallelize if col ops are independent of other ops
-      - flatten nested select ops
+-- **** Section for CreateCommand ****
 
-Timeline:
-  - TA Checkin #1 wed-fri?
-      - parser
-      - TableMap datastructure
-      - interpretation
-      - TESTING for everything (arbitrary + some unit tests)
-      - optimization definitions??
+data CreateCommand = CreateCommand
+  { name :: TableExpression,
+    id :: [Var]
+    -- TODO: Haven't finished
+  }
 
--}
+-- **** Section for SelectCommand ****
 
-type Name = String
-
-data Command = Command
-  { verb :: Verb, -- none empty
-    from :: Command,
-    wh :: ConditionalStatement
+data SelectCommand = SelectCommand
+  { exprs :: [(ColumnStyle, TableExpression)],
+    selectFrom :: FromExpression,
+    selectWh :: Maybe [Expression],
+    groupby :: Maybe [Expression],
+    orderby :: Maybe [Expression]
   }
   deriving (Eq, Show)
-
-data Verb
-  = Select [Expression]
-  | Insert [Expression]
-  | Delete
-  | Drop
-  deriving (Eq, Show)
-
---  | Create [FieldName]
---  | Update [Expression]
---  | AlterTable [AlterTableCommand]
-
--- data AlterTableCommand = Add | Drop
 
 data DType
   = StringType
@@ -71,51 +46,56 @@ data DType
   | NullType
   deriving (Eq, Show)
 
-type TableName = String
+data DValue
+  = IntVal Int
+  | BoolVal Bool
+  | StringVal String
+  | Null
+  deriving (Eq, Show, Ord)
 
-type FieldName = (String, DType)
+type Name = String
 
-data VerbStatement
-  = Distinct Expression
-  | Into Expression
-  | Expr Expression
-  | As Expression Expression
-  | Set FieldName Expression
+data FromExpression
+  = TableExpression Expression
+  | SubQuery SelectCommand
+  | Join JoinStyle SelectCommand SelectCommand
   deriving (Eq, Show)
 
-data AggregateFunction
-  = Count
-  | Sum
-  | Min
-  | Max
-  | Mean
-  | Median
-  deriving (Eq, Show, Enum)
+data JoinStyle
+  = LeftJoin
+  | RightJoin
+  | InnerJoin
+  | OuterJoin
+  deriving (Eq, Show, Enum, Bounded)
 
-data Order = Asc | Desc
+data TableExpression
+  = TableName Expression
+  | TableAlias Expression Var
   deriving (Eq, Show)
 
-data ConditionalStatement
-  = GroupBy
-  | Join
-  | OrderBy Expression Order
-  | Top Expression
-  | Offset Expression
-  | Fetch Expression
+data ColumnStyle
+  = Distinct
+  | All
   deriving (Eq, Show)
 
-data Expression
-  = Var Var
-  | Value Value
-  | Op1 Uop Expression
-  | Op2 Expression Bop Expression
+data OrderType
+  = ASC
+  | DESC
+  | NULL
+  | FIRST
+  | LAST
+  deriving (Eq, Show)
+
+data Command
+  = Select
+  | Create
+  | Drop
   deriving (Eq, Show)
 
 data Uop
-  = Neg
-  | Not
-  | Len
-  deriving (Eq, Show, Enum, Bounded)
+  = Not
+  | Neg
+  deriving (Eq, Show)
 
 data Bop
   = Plus
@@ -128,28 +108,35 @@ data Bop
   | Ge
   | Lt
   | Le
-  | Concat
   | And
   | Or
   | Like
   deriving (Eq, Show, Enum, Bounded)
 
-data Top
-  = Between
+data Expression
+  = Var Var
+  | Value DValue
+  | Op1 Uop Expression
+  | Op2 Expression Bop Expression
+  | Fun Function Expression
+  | Order Expression OrderType
   deriving (Eq, Show)
 
-data Vop
-  = In
+data Var
+  = Name Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
+  | QuotedName Name -- Quoted, can be anything
   deriving (Eq, Show)
 
-type Var = Name
-
-data Value
-  = IntVal Int
-  | BoolVal Bool
-  | StringVal String
-  | Null
-  deriving (Eq, Show, Ord)
+data Function
+  = Avg
+  | Count
+  | Max
+  | Min
+  | Sum
+  | Len
+  | Lower
+  | Upper
+  deriving (Eq, Show)
 
 {-
 What do we want to cover?
