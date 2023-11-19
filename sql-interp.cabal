@@ -40,7 +40,7 @@ library
   import:
       common-stanza
   exposed-modules:
-      Lib
+      Parser
   hs-source-dirs:
       src
 

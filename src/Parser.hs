@@ -1,5 +1,5 @@
-module Lib
-    ( someFunc
+module Parser
+    ( parseVerb
     ) where
 
 someFunc :: String

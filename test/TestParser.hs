@@ -1,7 +1,7 @@
 import Test.HUnit
 import Test.QuickCheck
 
-import Lib
+import Parser
 
 main :: IO ()
 main = do 
