@@ -51,7 +51,7 @@ data TableExpression
 
 data ColumnStyle
   = Distinct
-  | All
+  | All Bool
   deriving (Eq, Show)
 
 data FromExpression
@@ -115,10 +115,9 @@ data Function
   deriving (Eq, Show)
 
 data DType
-  = StringType
-  | IntType
+  = StringType Int
+  | IntType Int
   | BoolType
-  | NullType
   deriving (Eq, Show)
 
 data DValue

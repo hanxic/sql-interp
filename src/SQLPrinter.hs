@@ -35,7 +35,24 @@ instance PP OrderType where
 
 instance PP DValue where
   pp (IntVal i) = pp i
-  pp (BoolVal i) = pp i
+  pp (BoolVal b) = pp b
+  pp (StringVal s) = PP.text ("\"" <> s <> "\"")
+  pp NullVal = PP.text "NULL"
+
+instance PP DType where
+  pp (StringType i) = PP.text $ "VARCHAR(" <> show i <> ")"
+  pp (IntType i) = PP.text "INTEGER"
+  pp BoolType = PP.text "BIT(1)"
+
+instance PP Function where
+  pp Avg = PP.text "AVG"
+  pp Count = PP.text "COUNT"
+  pp Max = PP.text "MAX"
+  pp Min = PP.text "MIN"
+  pp Sum = PP.text "SUM"
+  pp Len = PP.text "LENGTH"
+  pp Lower = PP.text "LOWER"
+  pp Upper = PP.text "UPPER"
 
 instance PP Uop where
   pp Not = PP.text "NOT"
@@ -57,18 +74,30 @@ instance PP Bop where
   pp Like = PP.text "LIKE"
   pp Is = PP.text "IS"
 
-instance PP Function where
-  pp Avg = PP.text "AVG"
-  pp Count = PP.text "COUNT"
-  pp Max = PP.text "MAX"
-  pp Min = PP.text "MIN"
-  pp Sum = PP.text "SUM"
-  pp Len = PP.text "LENGTH"
-  pp Lower = PP.text "LOWER"
-  pp Upper = PP.text "UPPER"
-
-instance PP DValue where
-  pp = undefined
+instance PP Var where
+  pp (Name name) = PP.text name
+  pp (QuotedName name) = PP.text ("\"" <> name <> "\"")
 
 instance PP Expression where
+  pp = undefined
+
+instance PP JoinStyle where
+  pp = undefined
+
+instance PP FromExpression where
+  pp = undefined
+
+instance PP ColumnStyle where
+  pp = undefined
+
+instance PP TableExpression where
+  pp = undefined
+
+instance PP SelectCommand where
+  pp = undefined
+
+instance PP CreateCommand where
+  pp = undefined
+
+instance PP DeleteCommand where
   pp = undefined
