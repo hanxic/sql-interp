@@ -23,7 +23,7 @@ oneLine = PP.renderStyle (PP.style {PP.mode = PP.OneLineMode}) . pp
 instance PP Uop where
   pp = undefined
 
-instance PP Value where
+instance PP DValue where
   pp = undefined
 
 instance PP Expression where
