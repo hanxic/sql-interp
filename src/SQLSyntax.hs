@@ -41,6 +41,7 @@ data Command = C
     from :: TableName,
     wh :: Maybe ConditionalStatement
   }
+  deriving (Eq, Show)
 
 -- Will make the following size assumptions about table to reduce time
 --   - Tables have max five columns
@@ -125,6 +126,7 @@ data VerbStatement
   | Expr Expression
   | As Expression Expression
   | Set FieldName Expression
+  deriving (Eq, Show)
 
 data AggregateFunction
   = Count
@@ -133,8 +135,10 @@ data AggregateFunction
   | Max
   | Mean
   | Median
+  deriving (Eq, Show, Enum)
 
 data Order = Asc | Desc
+  deriving (Eq, Show)
 
 data ConditionalStatement
   = Where
@@ -157,6 +161,7 @@ data Expression
   = Value Value
   | Op1 Uop Expression
   | Op2 Expression Bop Expression
+  deriving (Eq, Show)
 
 instance Arbitrary Expression where
   arbitrary :: Gen Expression
@@ -169,6 +174,7 @@ data Uop
   = Neg
   | Not
   | Len
+  deriving (Eq, Show, Enum, Bounded)
 
 data Bop
   = Plus
@@ -185,12 +191,15 @@ data Bop
   | And
   | Or
   | Like
+  deriving (Eq, Show, Enum, Bounded)
 
 data Top
   = Between
+  deriving (Eq, Show)
 
 data Vop
   = In
+  deriving (Eq, Show)
 
 data Value
   = IntVal Int
