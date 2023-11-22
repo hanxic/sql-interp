@@ -52,7 +52,7 @@ data TableExpression
 data CountStyle
   = Distinct
   | All
-  deriving (Eq, Show)
+  deriving (Eq, Show, Enum, Bounded)
 
 data FromExpression
   = Table TableExpression -- e.g. FROM TEST
@@ -84,7 +84,7 @@ data Var
 data Uop
   = Not
   | Neg
-  deriving (Eq, Show)
+  deriving (Eq, Show, Enum, Bounded)
 
 data Bop
   = Plus
@@ -112,7 +112,7 @@ data Function
   | Len
   | Lower
   | Upper
-  deriving (Eq, Show)
+  deriving (Eq, Show, Enum, Bounded)
 
 data DType
   = StringType Int
