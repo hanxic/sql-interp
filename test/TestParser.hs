@@ -1,3 +1,5 @@
+module TestParser where
+
 import Parser
 import Test.HUnit
 import Test.QuickCheck
