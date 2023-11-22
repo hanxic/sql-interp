@@ -29,6 +29,9 @@ module Parser
     between,
     sepBy1,
     sepBy,
+    lookAhead,
+    endOfWord,
+    fullString,
   )
 where
 

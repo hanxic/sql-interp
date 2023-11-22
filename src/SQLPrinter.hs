@@ -90,22 +90,6 @@ instance PP Var where
   pp (QuotedName name) = PP.text ("\"" <> name <> "\"")
   pp AllVar = PP.char '*'
 
-isBase :: Expression -> Bool
-isBase Val {} = True
-isBase Var {} = True
-isBase Op1 {} = True
-isBase Fun {} = True
-isBase _ = False
-
-level :: Bop -> Int
-level Or = 9
-level And = 8
-level Times = 7
-level Divide = 7
-level Plus = 5
-level Minus = 5
-level _ = 3
-
 instance PP Expression where
   pp (Var v) = pp v
   pp (Val v) = pp v

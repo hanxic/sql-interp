@@ -24,6 +24,7 @@ data DeleteCommand = DeleteCommand
   { from :: FromExpression,
     wh :: Maybe [Expression]
   }
+  deriving (Eq, Show)
 
 -- **** Section for CreateCommand ****
 
@@ -32,6 +33,7 @@ data CreateCommand = CreateCommand
     id :: [Var]
     -- TODO: Haven't finished
   }
+  deriving (Eq, Show)
 
 -- **** Section for SelectCommand ****
 
@@ -68,6 +70,22 @@ data JoinStyle
   | InnerJoin
   | OuterJoin
   deriving (Eq, Show, Enum, Bounded)
+
+isBase :: Expression -> Bool
+isBase Val {} = True
+isBase Var {} = True
+isBase Op1 {} = True
+isBase Fun {} = True
+isBase _ = False
+
+level :: Bop -> Int
+level Or = 9
+level And = 8
+level Times = 7
+level Divide = 7
+level Plus = 5
+level Minus = 5
+level _ = 3
 
 data Expression
   = Var Var -- e.g. A

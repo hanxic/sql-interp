@@ -43,7 +43,7 @@ library
       Parser
       GenSQL
       Interpretation
-      JSONSyntax
+      TableSyntax
       Optimization
       SQLParser
       SQLPrinter

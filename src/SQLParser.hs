@@ -12,10 +12,20 @@ import SQLSyntax
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 
--- >>> P.parse (dvalueP) "\"\1011623k\bH\"\EOTfN6\DC3YEd\DLE\tbnJA}%\187860b\GSYV\DELK\1040129\53583[lM\n\200287\987861\ENQ\ACK\a!\DC2J\""
--- Right (StringVal "\1011623k\bH")
 prop_roundtrip_val :: DValue -> Bool
 prop_roundtrip_val v = P.parse dvalueP (SPP.pretty v) == Right v
+
+prop_roundtrip_exp :: Expression -> Bool
+prop_roundtrip_exp e = P.parse expP (SPP.pretty e) == Right e
+
+prop_roundtrip_select :: SelectCommand -> Bool
+prop_roundtrip_select sc = P.parse scP (SPP.pretty sc) == Right sc
+
+prop_roundtrip_create :: CreateCommand -> Bool
+prop_roundtrip_create cc = P.parse ccP (SPP.pretty cc) == Right cc
+
+prop_roundtrip_delete :: DeleteCommand -> Bool
+prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
 
 wsP :: Parser a -> Parser a
 wsP p = p <* many P.space
@@ -130,7 +140,7 @@ reservedFunction :: [String]
 reservedFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM", "LEN", "LOWER", "UPPER"]
 
 functionP :: Parser Function
-functionP = string2Function <$> wsP (P.choice $ map P.string reservedFunction)
+functionP = string2Function <$> wsP (P.choice $ map P.fullString reservedFunction)
   where
     string2Function :: String -> Function
     string2Function str =
@@ -144,11 +154,14 @@ functionP = string2Function <$> wsP (P.choice $ map P.string reservedFunction)
         "LOWER" -> Lower
         _ -> Upper
 
-reservedBop :: [String]
-reservedBop = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<", "AND", "OR", "LIKE", "IS"]
+reservedBopS :: [String]
+reservedBopS = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<"]
+
+reservedBopW :: [String]
+reservedBopW = ["AND", "OR", "LIKE", "IS"]
 
 bopP :: Parser Bop
-bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBop)
+bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBopS ++ map P.fullString reservedBopW)
   where
     string2Bop :: String -> Bop
     string2Bop str =
@@ -168,11 +181,14 @@ bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBop)
         "LIKE" -> Like
         _ -> Is
 
-reservedUop :: [String]
-reservedUop = ["-", "NOT"]
+reservedUopS :: [String]
+reservedUopS = ["-"]
+
+reservedUopW :: [String]
+reservedUopW = ["NOT"]
 
 uopP :: Parser Uop
-uopP = string2Uop <$> wsP (P.choice $ map P.string reservedUop)
+uopP = string2Uop <$> wsP (P.choice $ map P.string reservedUopS ++ map P.fullString reservedUopW)
   where
     string2Uop :: String -> Uop
     string2Uop str =
@@ -185,6 +201,7 @@ test_uopP =
   TestList
     [ P.parse uopP "-" ~?= Right Neg,
       P.parse uopP "NOT" ~?= Right Not,
+      P.parse uopP "NOTN" ~?= Left "No parses",
       P.parse (many uopP) "- NOT" ~?= Right [Neg, Not],
       P.parse uopP "+" ~?= Left "No parses" -- "+" nor a unary operator
     ]
@@ -197,7 +214,7 @@ test_bopP =
       P.parse bopP "*" ~?= Right Times,
       P.parse bopP "//" ~?= Right Divide,
       P.parse bopP "%" ~?= Right Modulo,
-      P.parse bopP "==" ~?= Right Eq,
+      P.parse bopP "=" ~?= Right Eq,
       P.parse bopP ">" ~?= Right Gt,
       P.parse bopP ">=" ~?= Right Ge,
       P.parse bopP "<" ~?= Right Lt,
@@ -211,5 +228,39 @@ test_bopP =
       P.parse bopP "!" ~?= Left "No parses" -- "!" not a binary operator
     ]
 
+-- | Parsing variable.
+-- If variable is Name, can be any Name that start with alphabet and contain both alphabet and numbers and underscore
+-- If variable is AllVar, parse *
+-- If variable is QuotedName, can be a quote and then everything
+starP :: Parser Var
+starP = AllVar <$ wsP (P.fullString "*")
+
+varP :: Parser Var
+varP = starP <|> undefined
+
 expP :: Parser Expression
-expP = undefined
+expP = compP
+  where
+    compP = sumP `P.chainl1` opAtLevel (level Gt)
+    sumP = prodP `P.chainl1` opAtLevel (level Plus)
+    prodP = uopexpP `P.chainl1` opAtLevel (level Times)
+    uopexpP =
+      baseP
+        <|> Op1 <$> uopP <*> uopexpP
+    baseP =
+      Var <$> varP
+        <|> parens expP
+        <|> Val <$> dvalueP
+
+-- | Parse an operator at a specified precedence level
+opAtLevel :: Int -> Parser (Expression -> Expression -> Expression)
+opAtLevel l = flip Op2 <$> P.filter (\x -> level x == l) bopP
+
+scP :: Parser SelectCommand
+scP = undefined
+
+ccP :: Parser CreateCommand
+ccP = undefined
+
+dcP :: Parser DeleteCommand
+dcP = undefined
