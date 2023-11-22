@@ -44,6 +44,8 @@ library
       GenSQL
       Interpretation
       TableSyntax
+      TableParser
+      TablePrinter
       Optimization
       SQLParser
       SQLPrinter
