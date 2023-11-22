@@ -30,7 +30,16 @@ instance PP String where
 instance PP Int where
   pp = PP.int
 
-instance PP OrderType where
+instance (PP a) => PP (Maybe a) where
+  pp Nothing = PP.empty
+  pp (Just a) = pp a
+
+instance PP OrderTypeFL where
+  pp NULLSFIRST = PP.text "NULLS FIRST"
+  pp NULLSLAST = PP.text "NULLS LAST"
+
+instance PP OrderTypeAD where
+  pp :: OrderTypeAD -> Doc
   pp = PP.text . show
 
 instance PP DValue where
@@ -77,24 +86,89 @@ instance PP Bop where
 instance PP Var where
   pp (Name name) = PP.text name
   pp (QuotedName name) = PP.text ("\"" <> name <> "\"")
+  pp AllVar = PP.char '*'
+
+isBase :: Expression -> Bool
+isBase Val {} = True
+isBase Var {} = True
+isBase Op1 {} = True
+isBase Fun {} = True
+isBase _ = False
+
+level :: Bop -> Int
+level Or = 9
+level And = 8
+level Times = 7
+level Divide = 7
+level Plus = 5
+level Minus = 5
+level _ = 3
 
 instance PP Expression where
-  pp = undefined
+  pp (Var v) = pp v
+  pp (Val v) = pp v
+  pp (Op1 o v) = pp o <+> if isBase v then pp v else PP.parens (pp v)
+  pp e@Op2 {} = ppPrec 0 e
+    where
+      ppPrec n (Op2 e1 bop e2) =
+        ppParens (level bop < n) $
+          ppPrec (level bop) e1 <+> pp bop <+> ppPrec (level bop + 1) e2
+      ppPrec _ e' = pp e'
+      ppParens b = if b then PP.parens else Prelude.id
+  pp (Fun f cs exp) =
+    pp f <> PP.parens (pp cs <+> pp exp)
 
 instance PP JoinStyle where
-  pp = undefined
+  pp LeftJoin = PP.text "LEFT JOIN"
+  pp RightJoin = PP.text "RIGHT JOIN"
+  pp InnerJoin = PP.text "JOIN"
+  pp OuterJoin = PP.text "OUTER JOIN"
+
+isBaseFromExpression :: FromExpression -> Bool
+isBaseFromExpression (Table _) = True
+isBaseFromExpression _ = False
 
 instance PP FromExpression where
-  pp = undefined
+  pp (Table texp) = pp texp
+  pp (SubQuery sc) = PP.parens $ pp sc
+  pp (Join js fexp1 fexp2) =
+    let ppExp1 = if isBaseFromExpression fexp1 then pp fexp1 else PP.parens $ pp fexp1
+     in let ppExp2 = if isBaseFromExpression fexp2 then pp fexp2 else PP.parens $ pp fexp2
+         in ppExp1 <+> PP.text "JOIN" <+> ppExp2
 
-instance PP ColumnStyle where
-  pp = undefined
+instance PP CountStyle where
+  pp Distinct = PP.text "DISTINCT"
+  pp All = PP.empty
 
 instance PP TableExpression where
-  pp = undefined
+  pp (TableName exp) = pp exp
+  pp (TableAlias exp v) = pp exp <+> PP.text "AS" <+> pp v
+
+isBaseTableExpression :: TableExpression -> Bool
+isBaseTableExpression (TableName e) = isBase e
+isBaseTableExpression (TableAlias e _) = isBase e
+
+ppNewLine :: Doc
+ppNewLine = PP.char '\n'
 
 instance PP SelectCommand where
-  pp = undefined
+  pp (SelectCommand exprs sf swh gb ob) =
+    PP.hsep $
+      PP.punctuate
+        ppNewLine
+        [ PP.text "SELECT" <+> PP.hsep (PP.punctuate PP.comma $ map ppSE exprs),
+          PP.text "FROM" <+> pp sf,
+          PP.text "WHERE" <+> pp swh,
+          PP.text "GROUP BY" <+> PP.hsep (PP.punctuate PP.comma $ map pp gb),
+          PP.text "ORDER BY" <+> PP.hsep (PP.punctuate PP.comma $ map ppOB ob)
+        ]
+    where
+      ppSE :: (CountStyle, TableExpression) -> Doc
+      ppSE (cs, te) =
+        pp cs <+> if isBaseTableExpression te then pp te else PP.parens $ pp te
+      ppOB :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> Doc
+      ppOB (v, o1, o2) =
+        pp v <+> pp o1 <+> pp o2
 
 instance PP CreateCommand where
   pp = undefined

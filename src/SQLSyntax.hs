@@ -36,28 +36,28 @@ data CreateCommand = CreateCommand
 -- **** Section for SelectCommand ****
 
 data SelectCommand = SelectCommand
-  { exprs :: [(ColumnStyle, TableExpression)],
+  { exprs :: [(CountStyle, TableExpression)],
     selectFrom :: FromExpression,
-    selectWh :: Maybe [Expression],
-    groupby :: Maybe [Expression],
-    orderby :: Maybe [Expression]
+    selectWh :: Maybe Expression,
+    groupby :: [Var],
+    orderby :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
   }
   deriving (Eq, Show)
 
 data TableExpression
-  = TableName Expression
-  | TableAlias Expression Var
+  = TableName Expression -- e.g. SELECT A / SELECT (A * 2)
+  | TableAlias Expression Var -- e.g. SELECT A AS B
   deriving (Eq, Show)
 
-data ColumnStyle
+data CountStyle
   = Distinct
-  | All Bool
+  | All
   deriving (Eq, Show)
 
 data FromExpression
-  = TableExpression Expression
-  | SubQuery SelectCommand
-  | Join JoinStyle SelectCommand SelectCommand
+  = Table TableExpression -- e.g. FROM TEST
+  | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
+  | Join JoinStyle FromExpression FromExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle
@@ -68,17 +68,17 @@ data JoinStyle
   deriving (Eq, Show, Enum, Bounded)
 
 data Expression
-  = Var Var
-  | Value DValue
-  | Op1 Uop Expression
-  | Op2 Expression Bop Expression
-  | Fun Function Expression
-  | Order Expression OrderType
+  = Var Var -- e.g. A
+  | Val DValue
+  | Op1 Uop Expression -- e.g. NOT A
+  | Op2 Expression Bop Expression -- e.g. A + 2
+  | Fun Function CountStyle Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
 data Var
   = Name Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
   | QuotedName Name -- Quoted, can be anything
+  | AllVar
   deriving (Eq, Show)
 
 data Uop
@@ -129,13 +129,15 @@ data DValue
 
 type Name = String
 
-data OrderType
+data OrderTypeAD
   = ASC
   | DESC
-  | NULL
-  | FIRST
-  | LAST
-  deriving (Eq, Show)
+  deriving (Eq, Show, Enum, Bounded)
+
+data OrderTypeFL
+  = NULLSFIRST
+  | NULLSLAST
+  deriving (Eq, Show, Enum, Bounded)
 
 {-
 What do we want to cover?
