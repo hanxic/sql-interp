@@ -1,3 +1,1 @@
-module GenSQL where
-
-import SQLSyntax
+module TestGen where
