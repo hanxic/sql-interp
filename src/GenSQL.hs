@@ -162,7 +162,6 @@ instance Arbitrary SelectCommand where
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where
   arbitrary = QC.arbitraryBoundedEnum
-
 instance Arbitrary OrderTypeAD where
   arbitrary = QC.arbitraryBoundedEnum
 

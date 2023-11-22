@@ -80,6 +80,13 @@ data Var
   | AllVar
   deriving (Eq, Show)
 
+instance Arbitrary Expression where
+  arbitrary :: Gen Expression
+  arbitrary = undefined
+
+  shrink :: Expression -> [Expression]
+  shrink c = undefined
+
 data Uop
   = Not
   | Neg
