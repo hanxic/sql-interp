@@ -126,5 +126,26 @@ test_stringValP =
 dvalueP :: Parser DValue
 dvalueP = intValP <|> boolValP <|> nullValP <|> stringValP
 
+reservedFunction :: [String]
+reservedFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM", "LEN", "LOWER", "UPPER"]
+
+functionP :: Parser Function
+functionP = string2Function <$> wsP (P.choice $ map P.string reservedFunction)
+  where
+    string2Function :: String -> Function
+    string2Function str =
+      case str of
+        "AVG" -> Avg
+        "COUNT" -> Count
+        "MAX" -> Max
+        "MIN" -> Min
+        "SUM" -> Sum
+        "LENGTH" -> Len
+        "LOWER" -> Lower
+        _ -> Upper
+
+reservedBop :: [String]
+reservedBop = ["+", "-", "*", "//", "%", "=", "<", "<=", ">", ">=", "AND", "OR", "LIKE", "IS"]
+
 expP :: Parser Expression
 expP = undefined
