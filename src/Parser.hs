@@ -138,6 +138,11 @@ space = satisfy isSpace
 char :: Char -> Parser Char
 char c = satisfy (c ==)
 
+-- | Parses and returns the specified character in a case insensitive fashion
+-- succeeds only if the input is exactly the character (case insensitve)
+charCI :: Char -> Parser Char
+charCI c = satisfy (\c' -> toLower c == c' || toUpper c == c')
+
 -- | Parses and returns the specified string.
 -- Succeeds only if the input is the given string
 string :: String -> Parser String

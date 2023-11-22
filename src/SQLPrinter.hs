@@ -14,6 +14,8 @@ import Text.PrettyPrint qualified as PP
 class PP a where
   pp :: a -> Doc
 
+-- | Default operation for the pretty printer. Displays using standard formatting
+-- rules, with generous use of indentation and newlines.
 pretty :: (PP a) => a -> String
 pretty = PP.render . pp
 
@@ -22,7 +24,7 @@ oneLine = PP.renderStyle (PP.style {PP.mode = PP.OneLineMode}) . pp
 
 instance PP Bool where
   pp True = PP.text "TRUE"
-  pp False = PP.text "False"
+  pp False = PP.text "FALSE"
 
 instance PP String where
   pp = PP.text

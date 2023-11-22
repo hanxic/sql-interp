@@ -5,9 +5,37 @@ import Data.Char qualified as Char
 import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
+  ( Bop,
+    ColumnExpression (..),
+    CountStyle,
+    DType (..),
+    DValue (..),
+    Expression (..),
+    FromExpression (..),
+    Function (Avg, Count, Max, Min, Sum),
+    JoinStyle,
+    Name,
+    OrderTypeAD,
+    OrderTypeFL,
+    SelectCommand (SelectCommand),
+    TableName,
+    Uop,
+    Var (..),
+  )
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
+
+-- | Generate a string literal, being careful about the characters that it may contain
+genStringLit :: Gen String
+genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
+  where
+    -- escape special characters appearing in the string,
+    escape :: String -> String
+    escape = foldr Char.showLitChar ""
+    -- generate strings containing printable characters or spaces, but not including '\"'
+    stringLitChars :: [Char]
+    stringLitChars = filter (\c -> c /= '\"' && (Char.isSpace c || Char.isPrint c)) ['\NUL' .. '~']
 
 {- Arbitrary instances for nontrivial types -}
 instance Arbitrary DValue where
@@ -15,7 +43,7 @@ instance Arbitrary DValue where
     QC.frequency
       [ (1, IntVal <$> arbitrary),
         (1, BoolVal <$> arbitrary),
-        (1, StringVal <$> arbitrary),
+        (1, StringVal <$> genStringLit),
         (1, pure NullVal)
       ]
 
