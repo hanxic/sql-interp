@@ -19,3 +19,9 @@ class PP a where
 -- rules, with generous use of indentation and newlines.
 pretty :: (PP a) => a -> String
 pretty = PP.render . pp
+
+instance PP Row where
+  pp = undefined
+
+instance PP Table where
+  pp = undefined

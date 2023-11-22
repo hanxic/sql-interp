@@ -238,6 +238,7 @@ starP = AllVar <$ wsP (P.fullString "*")
 varP :: Parser Var
 varP = starP <|> undefined
 
+-- >>> P.parse expP "1 + 2"
 expP :: Parser Expression
 expP = compP
   where
