@@ -28,7 +28,7 @@ data DeleteCommand = DeleteCommand
 -- **** Section for CreateCommand ****
 
 data CreateCommand = CreateCommand
-  { name :: TableExpression,
+  { name :: TableName,
     id :: [Var]
     -- TODO: Haven't finished
   }
@@ -36,7 +36,7 @@ data CreateCommand = CreateCommand
 -- **** Section for SelectCommand ****
 
 data SelectCommand = SelectCommand
-  { exprs :: [(CountStyle, TableExpression)],
+  { exprs :: [(CountStyle, ColumnExpression)],
     selectFrom :: FromExpression,
     selectWh :: Maybe Expression,
     groupby :: [Var],
@@ -44,9 +44,9 @@ data SelectCommand = SelectCommand
   }
   deriving (Eq, Show)
 
-data TableExpression
-  = TableName Expression -- e.g. SELECT A / SELECT (A * 2)
-  | TableAlias Expression Var -- e.g. SELECT A AS B
+data ColumnExpression
+  = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2)
+  | ColumnAlias Expression Var -- e.g. SELECT A AS B
   deriving (Eq, Show)
 
 data CountStyle
@@ -54,8 +54,10 @@ data CountStyle
   | All
   deriving (Eq, Show, Enum, Bounded)
 
+type TableName = String
+
 data FromExpression
-  = Table TableExpression -- e.g. FROM TEST
+  = Table TableName -- e.g. FROM TEST
   | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
   | Join JoinStyle FromExpression FromExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)

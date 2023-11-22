@@ -33,7 +33,12 @@ maxSize = 5
 genNamePool :: Gen [Name]
 genNamePool = do
   i <- QC.chooseInt (1, maxSize)
-  return ["var" ++ show j | j <- [0, i]]
+  return ["Var" ++ show j | j <- [0, i]]
+
+genTablePool :: Gen [TableName]
+genTablePool = do
+  i <- QC.chooseInt (1, maxSize)
+  return ["Table" ++ show j | j <- [0, i]]
 
 instance Arbitrary Var where
   arbitrary =
@@ -100,12 +105,23 @@ genExp n =
 instance Arbitrary Expression where
   arbitrary = QC.sized genExp
 
-instance Arbitrary TableExpression where
+instance Arbitrary FromExpression where
   arbitrary =
     QC.frequency
-      [ (1, TableName <$> arbitrary),
-        (1, TableAlias <$> arbitrary <*> arbitrary) -- This will cause some problem if alias is something that is invalid
+      [ (20, Table <$> (QC.elements =<< genTablePool)),
+        (1, SubQuery <$> arbitrary),
+        (20, Join <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
+
+instance Arbitrary ColumnExpression where
+  arbitrary =
+    QC.frequency
+      [ (1, ColumnName <$> arbitrary),
+        (1, ColumnAlias <$> arbitrary <*> arbitrary) -- This will cause some problem if alias is something that is invalid
+      ]
+
+instance Arbitrary SelectCommand where
+  arbitrary = SelectCommand <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
 
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where

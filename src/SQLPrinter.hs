@@ -140,13 +140,13 @@ instance PP CountStyle where
   pp Distinct = PP.text "DISTINCT"
   pp All = PP.empty
 
-instance PP TableExpression where
-  pp (TableName exp) = pp exp
-  pp (TableAlias exp v) = pp exp <+> PP.text "AS" <+> pp v
+instance PP ColumnExpression where
+  pp (ColumnName exp) = pp exp
+  pp (ColumnAlias exp v) = pp exp <+> PP.text "AS" <+> pp v
 
-isBaseTableExpression :: TableExpression -> Bool
-isBaseTableExpression (TableName e) = isBase e
-isBaseTableExpression (TableAlias e _) = isBase e
+isBaseTableExpression :: ColumnExpression -> Bool
+isBaseTableExpression (ColumnName e) = isBase e
+isBaseTableExpression (ColumnAlias e _) = isBase e
 
 ppNewLine :: Doc
 ppNewLine = PP.char '\n'
@@ -163,7 +163,7 @@ instance PP SelectCommand where
           PP.text "ORDER BY" <+> PP.hsep (PP.punctuate PP.comma $ map ppOB ob)
         ]
     where
-      ppSE :: (CountStyle, TableExpression) -> Doc
+      ppSE :: (CountStyle, ColumnExpression) -> Doc
       ppSE (cs, te) =
         pp cs <+> if isBaseTableExpression te then pp te else PP.parens $ pp te
       ppOB :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> Doc
