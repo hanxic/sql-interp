@@ -41,6 +41,13 @@ library
       common-stanza
   exposed-modules:
       Parser
+      GenSQL
+      Interpretation
+      JSONSyntax
+      Optimization
+      SQLParser
+      SQLPrinter
+      SQLSyntax
   hs-source-dirs:
       src
 
