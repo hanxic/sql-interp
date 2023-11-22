@@ -1,5 +1,5 @@
 module Parser
-    ( parseVerb
+    ( someFunc
     ) where
 
 someFunc :: String

@@ -1,13 +1,7 @@
 module SQLSyntax where
 
-import Control.Monad (mapM_)
-import Data.Char qualified as Char
-import Data.Map (Map)
-import Data.Map qualified as Map
-import Test.HUnit
-import Test.QuickCheck (Arbitrary (..), Gen)
+import Test.QuickCheck as QC
 import Test.QuickCheck qualified as QC
-
 
 {-
 
@@ -32,7 +26,7 @@ Wyatt Jobs:
       - search for col name -> if name never shows up delete col
       - parallelize if col ops are independent of other ops
       - flatten nested select ops
-      
+
 Timeline:
   - TA Checkin #1 wed-fri?
       - parser
@@ -41,34 +35,89 @@ Timeline:
       - TESTING for everything (arbitrary + some unit tests)
       - optimization definitions??
 
-
 -}
-
-data Command = Command
+data Command = C
   { verb :: Verb, -- none empty
-    from :: Command,
-    wh :: ConditionalStatement
+    from :: TableName,
+    wh :: Maybe ConditionalStatement
   }
 
+-- Will make the following size assumptions about table to reduce time
+--   - Tables have max five columns
+--   - Tables have max twenty rows
+
+instance Arbitrary Command where
+  arbitrary :: Gen Command
+  arbitrary = do
+    v <- (arbitrary :: Gen Verb)
+    f <- (arbitrary :: Gen TableName)
+    wh <- (arbitrary :: Gen ConditionalStatement)
+    return (C v f (Just wh))
+
+  shrink :: Command -> [Command]
+  shrink c = undefined
+
 data Verb
-  = Select [Expression]
-  | Insert [Expression]
-  | Delete
+  = Select [FieldName]
+  | Delete [Expression]
   | Drop
---  | Create [FieldName]
---  | Update [Expression]
+  | Update [Expression]
+  | Create [FieldName]
+
 --  | AlterTable [AlterTableCommand]
 
---data AlterTableCommand = Add | Drop
+instance Arbitrary Verb where
+  arbitrary :: Gen Verb
+  arbitrary = QC.oneof [arbitraryVerbWExp, arbitraryVerbWField]
+    where
+      arbitraryVerbWField :: Gen Verb
+      arbitraryVerbWField = do
+        v <- QC.elements [Select, Create]
+        xs <- QC.listOf (arbitrary :: Gen FieldName)
+        return (v xs)
+
+      arbitraryVerbWExp :: Gen Verb
+      arbitraryVerbWExp = do
+        v <- QC.elements [Delete, Update]
+        xs <- QC.listOf (arbitrary :: Gen Expression)
+        return (v xs)
+
+  shrink :: Verb -> [Verb]
+  shrink (Select xs) = map Select (shrink xs)
+  shrink (Delete xs) = map Delete (shrink xs)
+  shrink (Update xs) = map Update (shrink xs)
+  shrink (Create xs) = map Create (shrink xs)
+  shrink _ = []
+
+-- data AlterTableCommand = Add | Drop
 
 data DType
   = StringType
   | IntType
   | BoolType
   | NullType
+  deriving (Eq, Ord)
+
+instance Arbitrary DType where
+  arbitrary :: Gen DType
+  arbitrary = QC.elements [StringType, IntType, BoolType, NullType]
+
+  shrink :: DType -> [DType]
+  shrink _ = []
 
 type TableName = String
-type FieldName = (String, DType)
+
+newtype FieldName = FieldName (String, DType) deriving (Eq, Ord)
+
+instance Arbitrary FieldName where
+  arbitrary :: Gen FieldName
+  arbitrary = do
+    s <- QC.elements ["a", "b", "c", "d", "e"]
+    d <- arbitrary :: Gen DType
+    return $ FieldName (s, d)
+
+  shrink :: FieldName -> [FieldName]
+  shrink _ = []
 
 data VerbStatement
   = Distinct Expression
@@ -88,19 +137,33 @@ data AggregateFunction
 data Order = Asc | Desc
 
 data ConditionalStatement
-  = GroupBy
-  | Join
+  = Where
   | OrderBy Expression Order
   | Top Expression
   | Offset Expression
   | Fetch Expression
 
+instance Arbitrary ConditionalStatement where
+  arbitrary :: Gen ConditionalStatement
+  arbitrary = undefined
+
+  shrink :: ConditionalStatement -> [ConditionalStatement]
+  shrink _ = []
+
+--  | GroupBy
+--  | Join
 
 data Expression
-  = Var Var
-  | Value Value
+  = Value Value
   | Op1 Uop Expression
   | Op2 Expression Bop Expression
+
+instance Arbitrary Expression where
+  arbitrary :: Gen Expression
+  arbitrary = undefined
+
+  shrink :: Expression -> [Expression]
+  shrink c = undefined
 
 data Uop
   = Neg
@@ -129,13 +192,12 @@ data Top
 data Vop
   = In
 
-type Var = Name
-
 data Value
   = IntVal Int
   | BoolVal Bool
   | StringVal String
   | Null
+  deriving (Eq)
 
 {-
 What do we want to cover?
