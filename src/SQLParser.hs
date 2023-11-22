@@ -145,7 +145,71 @@ functionP = string2Function <$> wsP (P.choice $ map P.string reservedFunction)
         _ -> Upper
 
 reservedBop :: [String]
-reservedBop = ["+", "-", "*", "//", "%", "=", "<", "<=", ">", ">=", "AND", "OR", "LIKE", "IS"]
+reservedBop = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<", "AND", "OR", "LIKE", "IS"]
+
+bopP :: Parser Bop
+bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBop)
+  where
+    string2Bop :: String -> Bop
+    string2Bop str =
+      case str of
+        "+" -> Plus
+        "-" -> Minus
+        "*" -> Times
+        "//" -> Divide
+        "%" -> Modulo
+        "=" -> Eq
+        ">" -> Gt
+        ">=" -> Ge
+        "<" -> Lt
+        "<=" -> Le
+        "AND" -> And
+        "OR" -> Or
+        "LIKE" -> Like
+        _ -> Is
+
+reservedUop :: [String]
+reservedUop = ["-", "NOT"]
+
+uopP :: Parser Uop
+uopP = string2Uop <$> wsP (P.choice $ map P.string reservedUop)
+  where
+    string2Uop :: String -> Uop
+    string2Uop str =
+      case str of
+        "-" -> Neg
+        _ -> Not
+
+test_uopP :: Test
+test_uopP =
+  TestList
+    [ P.parse uopP "-" ~?= Right Neg,
+      P.parse uopP "NOT" ~?= Right Not,
+      P.parse (many uopP) "- NOT" ~?= Right [Neg, Not],
+      P.parse uopP "+" ~?= Left "No parses" -- "+" nor a unary operator
+    ]
+
+test_bopP :: Test
+test_bopP =
+  TestList
+    [ P.parse bopP "+" ~?= Right Plus,
+      P.parse bopP "-" ~?= Right Minus,
+      P.parse bopP "*" ~?= Right Times,
+      P.parse bopP "//" ~?= Right Divide,
+      P.parse bopP "%" ~?= Right Modulo,
+      P.parse bopP "==" ~?= Right Eq,
+      P.parse bopP ">" ~?= Right Gt,
+      P.parse bopP ">=" ~?= Right Ge,
+      P.parse bopP "<" ~?= Right Lt,
+      P.parse bopP "<=" ~?= Right Le,
+      P.parse bopP "AND" ~?= Right And,
+      P.parse bopP "OR" ~?= Right Or,
+      P.parse bopP "LIKE" ~?= Right Like,
+      P.parse bopP "IS" ~?= Right Is,
+      P.parse bopP "ISs" ~?= Left "No parses",
+      P.parse (many bopP) "+ - * // %" ~?= Right [Plus, Minus, Times, Divide, Modulo],
+      P.parse bopP "!" ~?= Left "No parses" -- "!" not a binary operator
+    ]
 
 expP :: Parser Expression
 expP = undefined

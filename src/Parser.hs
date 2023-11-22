@@ -148,6 +148,23 @@ charCI c = satisfy (\c' -> toLower c == c' || toUpper c == c')
 string :: String -> Parser String
 string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
 
+-- | Look ahead
+lookAhead :: Parser a -> Parser a
+lookAhead p = P $ \s -> do
+  (c, cs) <- doParse p s
+  return (c, s)
+
+-- | End of Word
+endOfWord :: Parser ()
+endOfWord = lookAhead (space *> pure () <|> eof)
+
+-- | Parses and returns the specified full string.
+-- Succeeds only if the input is the given string and nothing more
+fullString :: String -> Parser String
+fullString str = string str <* endOfWord
+
+-- | Parses and retursn the specified string and follow by nothing more than a space.
+
 -- | succeed only if the input is a (positive or negative) integer
 int :: Parser Int
 int = f <$> ((++) <$> string "-" <*> some digit <|> some digit)
