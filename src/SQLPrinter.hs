@@ -32,6 +32,13 @@ instance PP String where
 instance PP Int where
   pp = PP.int
 
+instance PP VerbAlter where
+  pp :: VerbAlter -> Doc
+  pp va =
+    case va of
+      Add b -> PP.text "ADD" <+> if b then PP.text "IF NOT EXISTS" else PP.empty
+      DropColumn b -> PP.text "Drop Column" <+> if b then PP.text "IF EXISTS" else PP.empty
+
 instance (PP a) => PP (Maybe a) where
   pp Nothing = PP.empty
   pp (Just a) = pp a
@@ -137,16 +144,22 @@ isBaseTableExpression (ColumnAlias e _) = isBase e
 ppNewLine :: Doc
 ppNewLine = PP.char '\n'
 
+ppFullQuery :: Doc -> Doc
+ppFullQuery d = d <> PP.semi
+
+ppList :: Doc -> [Doc] -> Doc
+ppList p l = PP.hsep $ PP.punctuate p l
+
 instance PP SelectCommand where
   pp (SelectCommand exprs sf swh gb ob li o) =
-    PP.hsep $
-      PP.punctuate
+    ppFullQuery $
+      ppList
         ppNewLine
-        [ PP.text "SELECT" <+> PP.hsep (PP.punctuate PP.comma $ map ppSE exprs),
+        [ PP.text "SELECT" <+> ppList PP.comma (map ppSE exprs),
           PP.text "FROM" <+> pp sf,
           PP.text "WHERE" <+> pp swh,
-          PP.text "GROUP BY" <+> PP.hsep (PP.punctuate PP.comma $ map pp gb),
-          PP.text "ORDER BY" <+> PP.hsep (PP.punctuate PP.comma $ map ppOB ob),
+          PP.text "GROUP BY" <+> ppList PP.comma (map pp gb),
+          PP.text "ORDER BY" <+> ppList PP.comma (map ppOB ob),
           PP.text "LIMIT" <+> pp li,
           PP.text "OFFSET" <+> pp o
         ]
@@ -159,7 +172,34 @@ instance PP SelectCommand where
         pp v <+> pp o1 <+> pp o2
 
 instance PP CreateCommand where
-  pp = undefined
+  pp (CreateCommand name ids) =
+    ppFullQuery $
+      PP.text "CREATE TABLE"
+        <+> pp name
+        <+> PP.parens (ppList PP.comma $ map (\(n, i) -> pp n <+> pp i) ids)
 
 instance PP DeleteCommand where
-  pp = undefined
+  pp (DeleteCommand fr wh) =
+    ppFullQuery $
+      PP.text
+        "DELETE FROM"
+        <+> pp fr
+        <+> PP.text "WHERE"
+        <+> pp wh -- Probably need a nested here
+
+instance PP UpsertIntoCommand where
+  pp :: UpsertIntoCommand -> Doc
+  pp (UpsertIntoCommand fr mayCN vals) =
+    let cnDoc = case mayCN of
+          Nothing -> PP.empty
+          Just cn -> PP.parens $ ppList PP.comma $ map pp cn
+     in ppFullQuery $
+          PP.text "UPSERT INTO"
+            <+> (pp fr <> cnDoc)
+            <+> (PP.text "VALUES" <> PP.parens (ppList PP.comma $ map pp vals))
+
+instance PP AlterTableCommand where
+  pp (AlterTableCommand fr ve co) =
+    PP.text "ALTER TABLE" <+> pp fr <+> pp ve <+> undefined
+
+-- TODO: Add nested to make sure not over 80 words

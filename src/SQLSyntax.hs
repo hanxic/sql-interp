@@ -141,7 +141,8 @@ data OrderTypeFL
 data VerbAlter
   = Add Bool
   | DropColumn Bool
-  | Set
+
+-- No set
 
 -- **** Section for AlterTableCommand ****
 
@@ -155,6 +156,7 @@ data AlterTableCommand = AlterTableCommand
 
 data UpsertIntoCommand = UpsertIntoCommand
   { fromUpsertI :: TableName,
+    columnNames :: Maybe [Name],
     valuesUpsertI :: [DValue]
   }
 
@@ -162,7 +164,7 @@ data UpsertIntoCommand = UpsertIntoCommand
 
 data DeleteCommand = DeleteCommand
   { fromDelete :: FromExpression,
-    whDelete :: Maybe [Expression]
+    whDelete :: Maybe Expression
   }
   deriving (Eq, Show)
 
@@ -170,7 +172,7 @@ data DeleteCommand = DeleteCommand
 
 data CreateCommand = CreateCommand
   { nameCreate :: TableName,
-    idCreate :: [Var]
+    idCreate :: [(Name, DType)]
     -- TODO: Haven't finished
   }
   deriving (Eq, Show)
