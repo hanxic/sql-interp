@@ -20,34 +20,13 @@ Grammar Source: https://www.dataquest.io/blog/sql-commands/
 Optimization Source: https://www.analyticsvidhya.com/blog/2021/10/a-detailed-guide-on-sql-query-optimization/
 Relational Algebra: https://byjus.com/gate/relational-algebra-in-dbms-notes/#:~:text=Calculus%20(or%20DRC)-,What%20is%20Relational%20Algebra%20in%20DBMS%3F,unary%20operator%20can%20be%20used
 Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/EquivalenceRules.pdf -}
-data DeleteCommand = DeleteCommand
-  { from :: FromExpression,
-    wh :: Maybe [Expression]
-  }
-  deriving (Eq, Show)
 
--- **** Section for CreateCommand ****
+-- Need to add offset into the syntax
 
-data CreateCommand = CreateCommand
-  { name :: TableName,
-    id :: [Var]
-    -- TODO: Haven't finished
-  }
-  deriving (Eq, Show)
-
--- **** Section for SelectCommand ****
-
-data SelectCommand = SelectCommand
-  { exprs :: [(CountStyle, ColumnExpression)],
-    selectFrom :: FromExpression,
-    selectWh :: Maybe Expression,
-    groupby :: [Var],
-    orderby :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
-  }
-  deriving (Eq, Show)
+-- ******** Construct for SQL Syntax ********
 
 data ColumnExpression
-  = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2)
+  = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2) / SELECT SUM(A) / SELECT SUM(2)
   | ColumnAlias Expression Var -- e.g. SELECT A AS B
   deriving (Eq, Show)
 
@@ -158,6 +137,122 @@ data OrderTypeFL
   = NULLSFIRST
   | NULLSLAST
   deriving (Eq, Show, Enum, Bounded)
+
+data VerbAlter
+  = Add Bool
+  | DropColumn Bool
+  | Set
+
+-- **** Section for AlterTableCommand ****
+
+data AlterTableCommand = AlterTableCommand
+  { fromAlterT :: TableName,
+    verbAlterT :: VerbAlter,
+    columnAlterT :: ColumnExpression
+  }
+
+-- **** Section for UpsertIntoCommand ****
+
+data UpsertIntoCommand = UpsertIntoCommand
+  { fromUpsertI :: TableName,
+    valuesUpsertI :: [DValue]
+  }
+
+-- **** Section for DeleteCommand ****
+
+data DeleteCommand = DeleteCommand
+  { fromDelete :: FromExpression,
+    whDelete :: Maybe [Expression]
+  }
+  deriving (Eq, Show)
+
+-- **** Section for CreateCommand ****
+
+data CreateCommand = CreateCommand
+  { nameCreate :: TableName,
+    idCreate :: [Var]
+    -- TODO: Haven't finished
+  }
+  deriving (Eq, Show)
+
+-- **** Section for SelectCommand ****
+
+data SelectCommand = SelectCommand
+  { exprsSelect :: [(CountStyle, ColumnExpression)],
+    fromSelect :: FromExpression,
+    whSelect :: Maybe Expression,
+    groupbySelect :: [Var],
+    orderbySelect :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)],
+    limitSelect :: Int,
+    offsetSelect :: Int
+  }
+  deriving (Eq, Show)
+
+-- ******** Reserved Words section ********
+
+reservedVerb :: [String]
+reservedVerb =
+  [ "SELECT",
+    "FROM",
+    "WHERE",
+    "ORDER",
+    "BY",
+    "GROUP",
+    "LIMIT",
+    "OFFSET",
+    "CREATE",
+    "DELETE"
+  ]
+
+reservedCountStyle :: [String]
+reservedCountStyle = ["DISTINCT"]
+
+reservedJoinStyle :: [String]
+reservedJoinStyle = ["JOIN", "LEFT", "RIGHT", "INNER", "OUTER"]
+
+reservedFunction :: [String]
+reservedFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM", "LEN", "LOWER", "UPPER"]
+
+reservedBopS :: [String]
+reservedBopS = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<"]
+
+reservedBopW :: [String]
+reservedBopW = ["AND", "OR", "LIKE", "IS"]
+
+reservedUopS :: [String]
+reservedUopS = ["-"]
+
+reservedUopW :: [String]
+reservedUopW = ["NOT"]
+
+reservedType :: [String]
+reservedType = ["VARCHAR", "INTEGER"]
+
+reservedVal :: [String]
+reservedVal = ["TRUE", "FALSE", "NULL"]
+
+reservedOrderTypeAD :: [String]
+reservedOrderTypeAD = ["ASC", "DESC"]
+
+reservedOrderTypeFL :: [String]
+reservedOrderTypeFL = ["NULLS", "FIRST", "LAST"]
+
+reservedKeyWords :: [String]
+reservedKeyWords =
+  concat
+    [ reservedVerb,
+      reservedCountStyle,
+      reservedJoinStyle,
+      reservedFunction,
+      reservedBopS,
+      reservedBopW,
+      reservedUopS,
+      reservedUopW,
+      reservedType,
+      reservedVal,
+      reservedOrderTypeAD,
+      reservedOrderTypeFL
+    ]
 
 {-
 What do we want to cover?

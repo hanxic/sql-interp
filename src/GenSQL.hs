@@ -149,7 +149,15 @@ instance Arbitrary ColumnExpression where
       ]
 
 instance Arbitrary SelectCommand where
-  arbitrary = SelectCommand <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary =
+    SelectCommand
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
 
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where

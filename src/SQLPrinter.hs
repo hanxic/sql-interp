@@ -138,7 +138,7 @@ ppNewLine :: Doc
 ppNewLine = PP.char '\n'
 
 instance PP SelectCommand where
-  pp (SelectCommand exprs sf swh gb ob) =
+  pp (SelectCommand exprs sf swh gb ob li o) =
     PP.hsep $
       PP.punctuate
         ppNewLine
@@ -146,7 +146,9 @@ instance PP SelectCommand where
           PP.text "FROM" <+> pp sf,
           PP.text "WHERE" <+> pp swh,
           PP.text "GROUP BY" <+> PP.hsep (PP.punctuate PP.comma $ map pp gb),
-          PP.text "ORDER BY" <+> PP.hsep (PP.punctuate PP.comma $ map ppOB ob)
+          PP.text "ORDER BY" <+> PP.hsep (PP.punctuate PP.comma $ map ppOB ob),
+          PP.text "LIMIT" <+> pp li,
+          PP.text "OFFSET" <+> pp o
         ]
     where
       ppSE :: (CountStyle, ColumnExpression) -> Doc

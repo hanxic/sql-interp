@@ -136,9 +136,6 @@ test_stringValP =
 dvalueP :: Parser DValue
 dvalueP = intValP <|> boolValP <|> nullValP <|> stringValP
 
-reservedFunction :: [String]
-reservedFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM", "LEN", "LOWER", "UPPER"]
-
 functionP :: Parser Function
 functionP = string2Function <$> wsP (P.choice $ map P.fullString reservedFunction)
   where
@@ -153,12 +150,6 @@ functionP = string2Function <$> wsP (P.choice $ map P.fullString reservedFunctio
         "LENGTH" -> Len
         "LOWER" -> Lower
         _ -> Upper
-
-reservedBopS :: [String]
-reservedBopS = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<"]
-
-reservedBopW :: [String]
-reservedBopW = ["AND", "OR", "LIKE", "IS"]
 
 bopP :: Parser Bop
 bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBopS ++ map P.fullString reservedBopW)
@@ -180,12 +171,6 @@ bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBopS ++ map P.fullStr
         "OR" -> Or
         "LIKE" -> Like
         _ -> Is
-
-reservedUopS :: [String]
-reservedUopS = ["-"]
-
-reservedUopW :: [String]
-reservedUopW = ["NOT"]
 
 uopP :: Parser Uop
 uopP = string2Uop <$> wsP (P.choice $ map P.string reservedUopS ++ map P.fullString reservedUopW)
@@ -235,10 +220,21 @@ test_bopP =
 starP :: Parser Var
 starP = AllVar <$ wsP (P.fullString "*")
 
-varP :: Parser Var
-varP = starP <|> undefined
+nameP :: Parser Var
+nameP = undefined
 
--- >>> P.parse expP "1 + 2"
+varP :: Parser Var
+varP = wsP (starP <|> undefined)
+
+-- >>> P.parse varP "*"
+-- Right AllVar
+
+test_varP :: Test
+test_varP =
+  TestList
+    [ P.parse varP "*" ~?= Right AllVar
+    ]
+
 expP :: Parser Expression
 expP = compP
   where
