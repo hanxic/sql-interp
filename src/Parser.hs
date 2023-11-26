@@ -19,6 +19,7 @@ module Parser
     digit,
     upper,
     lower,
+    underscore,
     space,
     char,
     string,
@@ -129,12 +130,13 @@ satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = filter p get
 
 -- | Parsers for specific sorts of characters
-alpha, digit, upper, lower, space :: Parser Char
+alpha, digit, upper, lower, space, underscore :: Parser Char
 alpha = satisfy isAlpha
 digit = satisfy isDigit
 upper = satisfy isUpper
 lower = satisfy isLower
 space = satisfy isSpace
+underscore = char '_'
 
 -- | Parses and returns the specified character
 -- succeeds only if the input is exactly that character

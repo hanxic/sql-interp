@@ -14,8 +14,8 @@ import Text.PrettyPrint qualified as PP
 class PP a where
   pp :: a -> Doc
 
--- | Default operation for the pretty printer. Displays using standard formatting
--- rules, with generous use of indentation and newlines.
+-- | Default operation for the pretty printer. Displays using standard
+-- formatting rules, with generous use of indentation and newlines.
 pretty :: (PP a) => a -> String
 pretty = PP.render . pp
 
@@ -36,8 +36,16 @@ instance PP VerbAlter where
   pp :: VerbAlter -> Doc
   pp va =
     case va of
-      Add b -> PP.text "ADD" <+> if b then PP.text "IF NOT EXISTS" else PP.empty
-      DropColumn b -> PP.text "Drop Column" <+> if b then PP.text "IF EXISTS" else PP.empty
+      Add b ->
+        PP.text "ADD"
+          <+> if b
+            then PP.text "IF NOT EXISTS"
+            else PP.empty
+      DropColumn b ->
+        PP.text "Drop Column"
+          <+> if b
+            then PP.text "IF EXISTS"
+            else PP.empty
 
 instance (PP a) => PP (Maybe a) where
   pp Nothing = PP.empty
@@ -93,7 +101,7 @@ instance PP Bop where
   pp Is = PP.text "IS"
 
 instance PP Var where
-  pp (Name name) = PP.text name
+  pp (VarName name) = PP.text name
   pp (QuotedName name) = PP.text ("\"" <> name <> "\"")
   pp AllVar = PP.char '*'
 
@@ -125,8 +133,14 @@ instance PP FromExpression where
   pp (Table texp) = pp texp
   pp (SubQuery sc) = PP.parens $ pp sc
   pp (Join js fexp1 fexp2) =
-    let ppExp1 = if isBaseFromExpression fexp1 then pp fexp1 else PP.parens $ pp fexp1
-     in let ppExp2 = if isBaseFromExpression fexp2 then pp fexp2 else PP.parens $ pp fexp2
+    let ppExp1 =
+          if isBaseFromExpression fexp1
+            then pp fexp1
+            else PP.parens $ pp fexp1
+     in let ppExp2 =
+              if isBaseFromExpression fexp2
+                then pp fexp2
+                else PP.parens $ pp fexp2
          in ppExp1 <+> PP.text "JOIN" <+> ppExp2
 
 instance PP CountStyle where
@@ -200,6 +214,6 @@ instance PP UpsertIntoCommand where
 
 instance PP AlterTableCommand where
   pp (AlterTableCommand fr ve co) =
-    PP.text "ALTER TABLE" <+> pp fr <+> pp ve <+> undefined
+    PP.text "ALTER TABLE" <+> pp fr <+> pp ve <+> pp co --- TODO: This is buggy
 
 -- TODO: Add nested to make sure not over 80 words

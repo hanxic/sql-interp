@@ -75,7 +75,7 @@ data Expression
   deriving (Eq, Show)
 
 data Var
-  = Name Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
+  = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
   | QuotedName Name -- Quoted, can be anything
   | AllVar
   deriving (Eq, Show)

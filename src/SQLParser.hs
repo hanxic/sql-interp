@@ -12,6 +12,9 @@ import SQLSyntax
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 
+errorMsgUnitTest :: Either String b
+errorMsgUnitTest = Left "No parses"
+
 prop_roundtrip_val :: DValue -> Bool
 prop_roundtrip_val v = P.parse dvalueP (SPP.pretty v) == Right v
 
@@ -111,13 +114,16 @@ nullValP = NullVal <$ wsP (P.string "NULL")
 escape :: (Char -> Bool) -> Parser Char
 escape f = P.satisfy (not . f)
 
-stringValP :: Parser DValue
-stringValP = StringVal <$> wsP (P.between quoteChar (many $ escape (quote ==)) quoteChar)
+quotedStringP :: (Parser Char -> Parser String) -> Parser String
+quotedStringP f = wsP (P.between quoteChar (f $ escape (quote ==)) quoteChar)
   where
     quote :: Char
     quote = '\"'
     quoteChar :: Parser Char
     quoteChar = P.char quote
+
+stringValP :: Parser DValue
+stringValP = StringVal <$> quotedStringP many
 
 test_stringValP :: Test
 test_stringValP =
@@ -220,24 +226,57 @@ test_bopP =
 starP :: Parser Var
 starP = AllVar <$ wsP (P.fullString "*")
 
-nameP :: Parser Var
-nameP = undefined
+nameP :: Parser String
+nameP = P.filter isValidName (wsP $ some baseP)
+  where
+    baseP :: Parser Char
+    baseP = P.choice [P.alpha, P.digit, P.underscore]
+    isValidName :: String -> Bool
+    isValidName [] = True
+    isValidName str@(x : _) = notElem str reservedKeyWords && not (Char.isDigit x)
 
 varP :: Parser Var
-varP = wsP (starP <|> undefined)
+varP =
+  wsP
+    ( starP
+        <|> (VarName <$> nameP)
+        <|> (QuotedName <$> quotedStringP some)
+        -- String name for column should be not empty
+    )
 
--- >>> P.parse varP "*"
--- Right AllVar
+-- >>> P.parse varP "1st"
+-- Left "No parses"
 
 test_varP :: Test
 test_varP =
   TestList
-    [ P.parse varP "*" ~?= Right AllVar
+    [ P.parse varP "*" ~?= Right AllVar,
+      P.parse varP "1st" ~?= errorMsgUnitTest,
+      P.parse varP "st1" ~?= Right (VarName "st1"),
+      P.parse varP "\"\"" ~?= errorMsgUnitTest,
+      -- TODO: not dealing with "\t" here. Maybe we should?
+      P.parse varP "\"1st\"" ~?= Right (QuotedName "1st")
     ]
 
+-- >>> P.parse expP "1 AND b OR 1"
+-- Right (Op2 (Op2 (Val (IntVal 1)) And (Var (VarName "b"))) Or (Val (IntVal 1)))
+
+test =
+  Fun Len Distinct (Val (StringVal "\993599"))
+
+-- >>> SPP.pretty test
+-- "LENGTH(DISTINCT \"\993599\")"
+
+test2 = "LENGTH(DISTINCT \"\993599\")"
+
+-- >>> P.parse expP test2
+-- Right (Var (VarName "LENGTH"))
+
 expP :: Parser Expression
-expP = compP
+expP = orBopP
   where
+    orBopP = andBopP `P.chainl1` opAtLevel (level Or)
+    andBopP = compP `P.chainl1` opAtLevel (level And)
     compP = sumP `P.chainl1` opAtLevel (level Gt)
     sumP = prodP `P.chainl1` opAtLevel (level Plus)
     prodP = uopexpP `P.chainl1` opAtLevel (level Times)

@@ -71,7 +71,7 @@ genTablePool = do
 instance Arbitrary Var where
   arbitrary =
     QC.frequency
-      [ (1, Name <$> (QC.elements =<< genNamePool)),
+      [ (1, VarName <$> (QC.elements =<< genNamePool)),
         (1, QuotedName <$> (QC.elements =<< genNamePool)),
         (1, pure AllVar)
       ]
