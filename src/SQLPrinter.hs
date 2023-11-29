@@ -126,11 +126,11 @@ instance PP JoinStyle where
   pp OuterJoin = PP.text "OUTER JOIN"
 
 isBaseFromExpression :: FromExpression -> Bool
-isBaseFromExpression (Table _) = True
+isBaseFromExpression (TableRef _) = True
 isBaseFromExpression _ = False
 
 instance PP FromExpression where
-  pp (Table texp) = pp texp
+  pp (TableRef texp) = pp texp
   pp (SubQuery sc) = PP.parens $ pp sc
   pp (Join js fexp1 fexp2) =
     let ppExp1 =

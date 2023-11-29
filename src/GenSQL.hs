@@ -136,7 +136,7 @@ instance Arbitrary Expression where
 instance Arbitrary FromExpression where
   arbitrary =
     QC.frequency
-      [ (20, Table <$> (QC.elements =<< genTablePool)),
+      [ (20, TableRef <$> (QC.elements =<< genTablePool)),
         (1, SubQuery <$> arbitrary),
         (20, Join <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
@@ -162,6 +162,7 @@ instance Arbitrary SelectCommand where
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where
   arbitrary = QC.arbitraryBoundedEnum
+
 instance Arbitrary OrderTypeAD where
   arbitrary = QC.arbitraryBoundedEnum
 
