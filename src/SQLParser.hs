@@ -392,11 +392,11 @@ test_countStyleP =
 opAtLevel :: Int -> Parser (Expression -> Expression -> Expression)
 opAtLevel l = flip Op2 <$> P.filter (\x -> level x == l) bopP
 
-catchAnyWord :: Parser (Maybe a) -> Parser (Maybe a)
-catchAnyWord = flip (<|>) (empty <$ P.lookAhead (wsP P.anyWord))
+catchAnyWord :: String -> Parser (Maybe a) -> Parser (Maybe a)
+catchAnyWord kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.anyWord)))
 
-catchAnyWordL :: Parser [a] -> Parser [a]
-catchAnyWordL = flip (<|>) (empty <$ P.lookAhead (wsP P.anyWord))
+catchAnyWordL :: String -> Parser [a] -> Parser [a]
+catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.anyWord)))
 
 exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
 exprsSelectP = undefined
@@ -406,30 +406,49 @@ fromSelectP = undefined
 
 whSelectP :: Parser (Maybe Expression)
 whSelectP =
-  catchAnyWord (wsP (P.string "WHERE") *> (Just <$> expP))
+  catchAnyWord whSelectKW (wsP (P.string whSelectKW) *> (Just <$> expP))
+  where
+    whSelectKW = "WHERE"
 
 groupbySelectP :: Parser [Var]
 groupbySelectP =
-  catchAnyWordL (wsP (P.string "GROUP BY") *> some varP)
+  catchAnyWordL "GROUP" (wsP (P.string groupbySelectKW) *> P.sepBy1 varP P.comma)
+  where
+    groupbySelectKW = "GROUP BY"
+
+test_groupbySelectP :: Test
+test_groupbySelectP =
+  TestList
+    [ P.parse groupbySelectP "GROUP BY" ~?= errorMsgUnitTest,
+      P.parse groupbySelectP "GROUP" ~?= errorMsgUnitTest,
+      P.parse groupbySelectP "" ~?= errorMsgUnitTest,
+      P.parse groupbySelectP "GROUP BY S" ~?= Right [VarName "S"]
+    ]
 
 orderbySelectP :: Parser [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
 orderbySelectP =
-  catchAnyWordL (wsP (P.string "ORDER BY") *> some orderSelectPAux)
+  catchAnyWordL "ORDER" (wsP (P.string orderbySelectKW) *> P.sepBy1 orderSelectPAux P.comma)
   where
+    orderbySelectKW = "ORDER BY"
     orderSelectPAux :: Parser (Var, Maybe OrderTypeAD, Maybe OrderTypeFL)
-    orderSelectPAux = (,,) <$> varP <*> catchAnyWord (Just <$> orderTypeADP) <*> catchAnyWord (Just <$> orderTypeFLP)
+    orderSelectPAux = (,,) <$> varP <*> optional orderTypeADP <*> optional orderTypeFLP
 
 test_orderbySelectP :: Test
 test_orderbySelectP =
   TestList
-    [ P.parse orderbySelectP "ORDER" ~?= Right [],
-      P.parse orderbySelectP "ORDER BY" ~?= Right [],
-      P.parse orderbySelectP "" ~?= Right [] -- Not the right test cases
+    [ P.parse orderbySelectP "ORDER" ~?= errorMsgUnitTest,
+      P.parse orderbySelectP "ORDER BY" ~?= errorMsgUnitTest,
+      P.parse orderbySelectP "" ~?= errorMsgUnitTest, -- Not the right test cases
+      P.parse orderbySelectP "ORDER BY S" ~?= Right [(VarName "S", Nothing, Nothing)],
+      P.parse orderbySelectP "ORDER BY S ASC, A DESC" ~?= Right [(VarName "S", Just ASC, Nothing), (VarName "A", Just DESC, Nothing)],
+      P.parse orderbySelectP "ORDER BY S ASC, A NULLS FIRST " ~?= Right [(VarName "S", Just ASC, Nothing), (VarName "A", Nothing, Just NULLSFIRST)]
     ]
 
 limitSelectP :: Parser (Maybe Int)
 limitSelectP =
-  catchAnyWord (wsP (P.string "LIMIT") *> (Just <$> P.int))
+  catchAnyWord limitSelectKW (wsP (P.string limitSelectKW) *> (Just <$> P.int))
+  where
+    limitSelectKW = "LIMIT"
 
 {- P.maybeParse
   (wsP $ P.string "LIMIT")
@@ -439,7 +458,7 @@ limitSelectP =
 test_limitSelectP :: Test
 test_limitSelectP =
   TestList
-    [ P.parse limitSelectP "LIMIT" ~?= Right Nothing,
+    [ P.parse limitSelectP "LIMIT" ~?= errorMsgUnitTest,
       P.parse limitSelectP "LIMIT 1" ~?= Right (Just 1),
       P.parse limitSelectP "    " ~?= errorMsgUnitTest,
       P.parse limitSelectP "    ;" ~?= Right Nothing
@@ -449,13 +468,17 @@ test_limitSelectP =
 
 offsetSelectP :: Parser (Maybe Int)
 offsetSelectP =
-  wsP (P.string "OFFSET") *> (Just <$> P.int)
-    <|> Nothing <$ P.lookAhead (wsP P.anyWord)
+  catchAnyWord offsetSelectKW (wsP (P.string offsetSelectKW) *> (Just <$> P.int))
+  where
+    {- wsP (P.string "OFFSET") *> (Just <$> P.int)
+      <|> Nothing <$ P.lookAhead (wsP P.anyWord) -}
+
+    offsetSelectKW = "OFFSET"
 
 test_offsetSelectP :: Test
 test_offsetSelectP =
   TestList
-    [ P.parse offsetSelectP "OFFSET" ~?= Right Nothing,
+    [ P.parse offsetSelectP "OFFSET" ~?= errorMsgUnitTest,
       P.parse offsetSelectP "OFFSET 1" ~?= Right (Just 1),
       P.parse offsetSelectP "   " ~?= errorMsgUnitTest,
       P.parse offsetSelectP " ;" ~?= Right Nothing

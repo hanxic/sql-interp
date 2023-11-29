@@ -36,6 +36,7 @@ module Parser
     maybeParse,
     anyChar,
     anyWord,
+    comma,
   )
 where
 
@@ -140,6 +141,8 @@ upper = satisfy isUpper
 lower = satisfy isLower
 space = satisfy isSpace
 underscore = char '_'
+
+comma = char ','
 
 -- | Parses and returns the specified character
 -- succeeds only if the input is exactly that character
