@@ -62,7 +62,7 @@ instance PP OrderTypeAD where
 instance PP DValue where
   pp (IntVal i) = pp i
   pp (BoolVal b) = pp b
-  pp (StringVal s) = PP.text ("\"" <> s <> "\"")
+  pp (StringVal s) = PP.text ("\'" <> s <> "\'")
   pp NullVal = PP.text "NULL"
 
 instance PP DType where
@@ -71,14 +71,21 @@ instance PP DType where
   pp BoolType = PP.text "BIT(1)"
 
 instance PP Function where
+  {-   pp (Avg cs e) = PP.text "AVG" <+> PP.parens (pp cs <+> pp e)
+    pp (Count cs e) = PP.text "COUNT" <+> PP.parens (pp cs <+> pp e)
+    pp (Max cs e) = PP.text "MAX" <+> PP.parens (pp cs <+> pp e)
+    pp (Min cs e) = PP.text "MIN" <+> PP.parens (pp cs <+> pp e)
+    pp (Sum cs e) = PP.text "SUM" <+> PP.parens (pp cs <+> pp e) -}
+  pp Len = PP.text "LENGTH"
+  pp Lower = PP.text "LOWER"
+  pp Upper = PP.text "UPPER"
+
+instance PP AggFunction where
   pp Avg = PP.text "AVG"
   pp Count = PP.text "COUNT"
   pp Max = PP.text "MAX"
   pp Min = PP.text "MIN"
   pp Sum = PP.text "SUM"
-  pp Len = PP.text "LENGTH"
-  pp Lower = PP.text "LOWER"
-  pp Upper = PP.text "UPPER"
 
 instance PP Uop where
   pp Not = PP.text "NOT"
@@ -116,7 +123,9 @@ instance PP Expression where
           ppPrec (level bop) e1 <+> pp bop <+> ppPrec (level bop + 1) e2
       ppPrec _ e' = pp e'
       ppParens b = if b then PP.parens else Prelude.id
-  pp (Fun f cs exp) =
+  pp (Fun f exp) =
+    pp f <> PP.parens (pp exp)
+  pp (AggFun f cs exp) =
     pp f <> PP.parens (pp cs <+> pp exp)
 
 instance PP JoinStyle where

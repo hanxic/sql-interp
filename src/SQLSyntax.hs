@@ -58,20 +58,28 @@ isBase Fun {} = True
 isBase _ = False
 
 level :: Bop -> Int
-level Or = 9
-level And = 8
-level Times = 7
-level Divide = 7
-level Plus = 5
-level Minus = 5
-level _ = 3
+level Times = 20
+level Divide = 20
+level Modulo = 20
+level Plus = 17
+level Minus = 17
+level Eq = 15
+level Gt = 15
+level Ge = 15
+level Lt = 15
+level Le = 15
+level Is = 15
+level Like = 15
+level Or = 8
+level And = 7
 
 data Expression
   = Var Var -- e.g. A
   | Val DValue
   | Op1 Uop Expression -- e.g. NOT A
   | Op2 Expression Bop Expression -- e.g. A + 2
-  | Fun Function CountStyle Expression -- e.g. SUM / AVG
+  | AggFun AggFunction CountStyle Expression
+  | Fun Function Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
 data Var
@@ -102,13 +110,16 @@ data Bop
   | Is
   deriving (Eq, Show, Enum, Bounded)
 
-data Function
+data AggFunction
   = Avg
   | Count
   | Max
   | Min
   | Sum
-  | Len
+  deriving (Eq, Show, Enum, Bounded)
+
+data Function
+  = Len
   | Lower
   | Upper
   deriving (Eq, Show, Enum, Bounded)
@@ -212,8 +223,11 @@ reservedCountStyle = ["DISTINCT"]
 reservedJoinStyle :: [String]
 reservedJoinStyle = ["JOIN", "LEFT", "RIGHT", "INNER", "OUTER"]
 
+reservedAggFunction :: [String]
+reservedAggFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM"]
+
 reservedFunction :: [String]
-reservedFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM", "LEN", "LOWER", "UPPER"]
+reservedFunction = ["LENGTH", "LOWER", "UPPER"]
 
 reservedBopS :: [String]
 reservedBopS = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<"]
@@ -245,6 +259,7 @@ reservedKeyWords =
     [ reservedVerb,
       reservedCountStyle,
       reservedJoinStyle,
+      reservedAggFunction,
       reservedFunction,
       reservedBopS,
       reservedBopW,
@@ -255,6 +270,9 @@ reservedKeyWords =
       reservedOrderTypeAD,
       reservedOrderTypeFL
     ]
+
+reservedChar :: String
+reservedChar = "\"'()`"
 
 {-
 What do we want to cover?

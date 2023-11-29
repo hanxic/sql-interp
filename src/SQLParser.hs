@@ -11,6 +11,7 @@ import SQLPrinter qualified as SPP
 import SQLSyntax
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
+import Text.ParserCombinators.ReadP (count)
 
 errorMsgUnitTest :: Either String b
 errorMsgUnitTest = Left "No parses"
@@ -31,7 +32,7 @@ prop_roundtrip_delete :: DeleteCommand -> Bool
 prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
 
 wsP :: Parser a -> Parser a
-wsP p = p <* many P.space
+wsP p = many P.space *> p <* many P.space
 
 test_wsP :: Test
 test_wsP =
@@ -114,25 +115,22 @@ nullValP = NullVal <$ wsP (P.string "NULL")
 escape :: (Char -> Bool) -> Parser Char
 escape f = P.satisfy (not . f)
 
-quotedStringP :: (Parser Char -> Parser String) -> Parser String
-quotedStringP f = wsP (P.between quoteChar (f $ escape (quote ==)) quoteChar)
+stringInP :: Char -> (Parser Char -> Parser String) -> Parser String
+stringInP c f = wsP (P.between cP (f $ escape (c ==)) cP)
   where
-    quote :: Char
-    quote = '\"'
-    quoteChar :: Parser Char
-    quoteChar = P.char quote
+    cP = P.char c
 
 stringValP :: Parser DValue
-stringValP = StringVal <$> quotedStringP many
+stringValP = StringVal <$> stringInP '\'' many
 
 test_stringValP :: Test
 test_stringValP =
   TestList
-    [ P.parse stringValP "\"a\"" ~?= Right (StringVal "a"),
-      P.parse stringValP "\"a\\\"\"" ~?= Right (StringVal "a\\"),
-      P.parse (many stringValP) "\"a\"   \"b\""
+    [ P.parse stringValP "\'a\'" ~?= Right (StringVal "a"),
+      P.parse stringValP "\'a\\\'\'" ~?= Right (StringVal "a\\"),
+      P.parse (many stringValP) "\'a\'   \'b\'"
         ~?= Right [StringVal "a", StringVal "b"],
-      P.parse (many stringValP) "\" a\"   \"b\""
+      P.parse (many stringValP) "\' a\'   \'b\'"
         ~?= Right [StringVal " a", StringVal "b"]
     ]
 
@@ -142,20 +140,49 @@ test_stringValP =
 dvalueP :: Parser DValue
 dvalueP = intValP <|> boolValP <|> nullValP <|> stringValP
 
+string2Function :: String -> Function
+string2Function str =
+  case str of
+    "LENGTH" -> Len
+    "LOWER" -> Lower
+    _ -> Upper
+
+string2AggFunction :: String -> AggFunction
+string2AggFunction str =
+  case str of
+    "AVG" -> Avg
+    "COUNT" -> Count
+    "MAX" -> Max
+    "MIN" -> Min
+    _ -> Sum
+
 functionP :: Parser Function
-functionP = string2Function <$> wsP (P.choice $ map P.fullString reservedFunction)
-  where
-    string2Function :: String -> Function
-    string2Function str =
-      case str of
-        "AVG" -> Avg
-        "COUNT" -> Count
-        "MAX" -> Max
-        "MIN" -> Min
-        "SUM" -> Sum
-        "LENGTH" -> Len
-        "LOWER" -> Lower
-        _ -> Upper
+functionP =
+  string2Function <$> wsP (P.choice $ map P.string reservedFunction)
+
+test_functionP :: Test
+test_functionP =
+  TestList
+    [ P.parse functionP "LOWER" ~?= Right Lower,
+      P.parse functionP "UPPER" ~?= Right Upper,
+      P.parse functionP "LENGTH" ~?= Right Len,
+      P.parse functionP "*" ~?= errorMsgUnitTest
+    ]
+
+aggFunctionP :: Parser AggFunction
+aggFunctionP =
+  string2AggFunction <$> wsP (P.choice $ map P.string reservedAggFunction)
+
+test_aggFunctionP :: Test
+test_aggFunctionP =
+  TestList
+    [ P.parse aggFunctionP "AVG" ~?= Right Avg,
+      P.parse aggFunctionP "COUNT " ~?= Right Count,
+      P.parse aggFunctionP "MAX " ~?= Right Max,
+      P.parse aggFunctionP "MIN " ~?= Right Min,
+      P.parse aggFunctionP "SUM " ~?= Right Sum,
+      P.parse functionP "*" ~?= errorMsgUnitTest
+    ]
 
 bopP :: Parser Bop
 bopP = string2Bop <$> wsP (P.choice $ map P.string reservedBopS ++ map P.fullString reservedBopW)
@@ -224,7 +251,7 @@ test_bopP =
 -- If variable is AllVar, parse *
 -- If variable is QuotedName, can be a quote and then everything
 starP :: Parser Var
-starP = AllVar <$ wsP (P.fullString "*")
+starP = AllVar <$ wsP (P.string "*")
 
 nameP :: Parser String
 nameP = P.filter isValidName (wsP $ some baseP)
@@ -239,9 +266,17 @@ varP :: Parser Var
 varP =
   wsP
     ( starP
-        <|> (VarName <$> nameP)
-        <|> (QuotedName <$> quotedStringP some)
-        -- String name for column should be not empty
+        <|> ( VarName
+                <$> P.filter
+                  (`notElem` reservedKeyWords)
+                  nameP
+            )
+        <|> ( QuotedName
+                <$> P.filter
+                  (`notElem` reservedKeyWords)
+                  (stringInP '\"' some)
+            )
+            -- String name for column should be not empty)
     )
 
 -- >>> P.parse varP "1st"
@@ -262,15 +297,32 @@ test_varP =
 -- Right (Op2 (Op2 (Val (IntVal 1)) And (Var (VarName "b"))) Or (Val (IntVal 1)))
 
 test =
-  Fun Len Distinct (Val (StringVal "\993599"))
+  Op2 (AggFun Count Distinct (Val (IntVal 3028638))) Plus (Op1 Not (Op1 Neg (Fun Upper (Val (StringVal "\23278\DC2 q9m\158086\SO\1002059\DC3\b)\39083'\1108928")))))
+
+{- Fun Len Distinct (Val (StringVal "\993599")) -}
 
 -- >>> SPP.pretty test
--- "LENGTH(DISTINCT \"\993599\")"
+-- "COUNT(DISTINCT 3028638) + NOT - UPPER('\23278\DC2 q9m\158086\SO\1002059\DC3\b)\39083'\1108928')"
 
-test2 = "LENGTH(DISTINCT \"\993599\")"
+test2 = "COUNT(DISTINCT 3028638) + NOT - UPPER('\23278\DC2 q9m\158086\SO\1002059\DC3\b)\39083'\1108928')"
 
 -- >>> P.parse expP test2
--- Right (Var (VarName "LENGTH"))
+-- Right (AggFun Count Distinct (Val (IntVal 3028638)))
+
+-- >>> Char.ord '\''
+-- 39
+
+test4 =
+  Op2
+    (Fun Lower (Val (StringVal "2\1046076\46352\1096575 \983403")))
+    Plus
+    (Op2 (AggFun Avg Distinct (Var (VarName "Var2"))) And (Fun Len (Var (QuotedName "Var5"))))
+
+-- >>> P.parse aggFunP test2
+-- Left "No parses"
+
+-- >>> P.parse expP "(Var0 IS NULL) % LENGTH('QR\1053562I'N')"
+-- Right (Op2 (Var (VarName "Var0")) Is (Val NullVal))
 
 expP :: Parser Expression
 expP = orBopP
@@ -284,9 +336,57 @@ expP = orBopP
       baseP
         <|> Op1 <$> uopP <*> uopexpP
     baseP =
-      Var <$> varP
+      aggFunP
+        <|> funP
+        <|> Var <$> varP
         <|> parens expP
         <|> Val <$> dvalueP
+
+funP :: Parser Expression
+funP = Fun <$> functionP <*> wsP (parens expP)
+
+aggFunP :: Parser Expression
+aggFunP = uncurry <$> (AggFun <$> aggFunctionP) <*> aggFunPAux
+  where
+    aggFunPAux = wsP (parens ((,) <$> countStyleP <*> expP))
+
+-- >>> P.parse (parens expP) "(1)"
+-- Right (Val (IntVal 1))
+
+-- >>> P.parse aggFunP "AVG(*)"
+-- Right (AggFun Avg All (Var AllVar))
+
+-- >>> P.parse expP "*"
+-- Right (Var AllVar)
+
+test_aggFunP :: Test
+test_aggFunP =
+  TestList
+    [ P.parse aggFunP "AVG(*)" ~?= Right (AggFun Avg All (Var AllVar)),
+      P.parse aggFunP "SUM(1 + 2)" ~?= Right (AggFun Sum All (Op2 (Val $ IntVal 1) Plus (Val $ IntVal 2))),
+      P.parse aggFunP "COUNT(DISTINCT 1)" ~?= Right (AggFun Count Distinct (Val $ IntVal 1)),
+      P.parse aggFunP "COUNT(DISTINCT a)" ~?= Right (AggFun Count Distinct (Var $ VarName "a"))
+    ]
+
+test3 :: Parser (CountStyle, Expression)
+test3 = parens ((,) <$> countStyleP <*> expP)
+
+countStyleP :: Parser CountStyle
+countStyleP = distinctStringP <|> pure All
+  where
+    distinctStringP :: Parser CountStyle
+    distinctStringP = wsP (P.string "DISTINCT") *> pure Distinct
+
+test_countStyleP :: Test
+test_countStyleP =
+  TestList
+    [ P.parse countStyleP "*" ~?= Right All,
+      P.parse countStyleP "DISTINCT" ~?= Right Distinct,
+      P.parse countStyleP "    DISTINCT" ~?= Right Distinct,
+      P.parse countStyleP "    DISTINCT      " ~?= Right Distinct,
+      P.doParse countStyleP "DISTINCT s" ~?= Just (Distinct, "s"),
+      P.doParse countStyleP "DISTIN " ~?= Just (All, "DISTIN ")
+    ]
 
 -- | Parse an operator at a specified precedence level
 opAtLevel :: Int -> Parser (Expression -> Expression -> Expression)

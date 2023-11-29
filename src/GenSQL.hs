@@ -5,29 +5,13 @@ import Data.Char qualified as Char
 import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
-  ( Bop,
-    ColumnExpression (..),
-    CountStyle,
-    DType (..),
-    DValue (..),
-    Expression (..),
-    FromExpression (..),
-    Function (Avg, Count, Max, Min, Sum),
-    JoinStyle,
-    Name,
-    OrderTypeAD,
-    OrderTypeFL,
-    SelectCommand (SelectCommand),
-    TableName,
-    Uop,
-    Var (..),
-  )
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 
 -- | Generate a string literal, being careful about the characters that it may contain
-genStringLit :: Gen String
+
+{- genStringLit :: Gen String
 genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
   where
     -- escape special characters appearing in the string,
@@ -35,7 +19,22 @@ genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
     escape = foldr Char.showLitChar ""
     -- generate strings containing printable characters or spaces, but not including '\"'
     stringLitChars :: [Char]
-    stringLitChars = filter (\c -> c /= '\"' && (Char.isSpace c || Char.isPrint c)) ['\NUL' .. '~']
+    stringLitChars = filter (\c -> notElem c SQLSyntax.reservedChar && (Char.isSpace c || Char.isPrint c)) ['\NUL' .. '~'] -}
+
+genTest :: Gen String
+genTest = return "'"
+
+escape' = filter (`notElem` reservedChar)
+
+test1000 = escape' <$> genTest
+
+genStringLit :: Gen String
+genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
+  where
+    escape :: String -> String
+    escape = filter (`notElem` reservedChar)
+    stringLitChars :: [Char]
+    stringLitChars = filter (\c -> Char.isSpace c || Char.isPrint c) ['\NUL' .. '~']
 
 {- Arbitrary instances for nontrivial types -}
 instance Arbitrary DValue where
@@ -86,26 +85,25 @@ genValTC (IntType i) = do
   QC.frequency [(n, IntVal <$> QC.chooseInt (1, 2 ^ i)), (1, pure NullVal)]
 genValTC (StringType i) = do
   n <- genPos
-  QC.frequency [(n, StringVal <$> (arbitrary `QC.suchThat` (\s -> length s <= i))), (1, pure NullVal)]
+  QC.frequency [(n, StringVal <$> (genStringLit `QC.suchThat` (\s -> length s <= i))), (1, pure NullVal)]
 genValTC BoolType = do
   n <- genPos
   QC.frequency
     [(n, BoolVal <$> arbitrary), (1, pure NullVal)]
 
+inferAggFunctionType :: AggFunction -> Gen DType
+inferAggFunctionType f =
+  genIntType -- TODO: Add more types when more functions are added
+
 inferFunctionType :: Function -> Gen DType
 inferFunctionType f =
-  case f of
-    Avg -> genIntType
-    Count -> genIntType
-    Max -> genIntType
-    Min -> genIntType
-    Sum -> genIntType
-    _ -> genStringType
-  where
-    genIntType :: Gen DType
-    genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
-    genStringType :: Gen DType
-    genStringType = return $ StringType 255 --- Temporary value
+  genStringType -- TODO: Add more types when more functions are added
+
+genIntType :: Gen DType
+genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
+
+genStringType :: Gen DType
+genStringType = return $ StringType 255 --- Temporary value
 
 genExp :: Int -> Gen Expression
 genExp n
@@ -116,22 +114,51 @@ genExp n =
     [ (1, genExp 0),
       (n, Op1 <$> arbitrary <*> genExp n'),
       (n, Op2 <$> genExp n' <*> arbitrary <*> genExp n'),
-      (n, genFunExp)
+      (n, genFun),
+      (n, genAggFun)
     ]
   where
     n' = n `div` 2
-    genFunExp :: Gen Expression -- Make sure generate dvalue such that the function type check
-    genFunExp =
+    genFun :: Gen Expression
+    genFun =
       arbitrary
         >>= ( \f ->
                 Fun f
-                  <$> arbitrary
-                  <*> QC.frequency
-                    [(1, Var <$> arbitrary), (1, Val <$> (inferFunctionType f >>= genValTC))]
+                  <$> (inferFunctionType f >>= genExpTC)
             )
+    genAggFun :: Gen Expression
+    genAggFun =
+      arbitrary
+        >>= ( \f ->
+                AggFun f
+                  <$> arbitrary
+                  <*> (inferAggFunctionType f >>= genExpTC)
+            )
+    genExpTC :: DType -> Gen Expression
+    genExpTC t =
+      QC.frequency
+        [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
 
 instance Arbitrary Expression where
   arbitrary = QC.sized genExp
+
+-- Scratch paper for function instance
+{- let genExpTC =
+      (=<<)
+        ( \t ->
+            QC.frequency
+              [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
+        )
+ in QC.frequency
+      [ (1, Avg <$> arbitrary <*> genExpTC genIntType),
+        (1, Count <$> arbitrary <*> genExpTC genIntType),
+        (1, Max <$> arbitrary <*> genExpTC genIntType),
+        (1, Min <$> arbitrary <*> genExpTC genIntType),
+        (1, Sum <$> arbitrary <*> genExpTC genIntType),
+        (1, Len <$> genExpTC genStringType),
+        (1, Lower <$> genExpTC genStringType),
+        (1, Upper <$> genExpTC genStringType)
+      ] -}
 
 instance Arbitrary FromExpression where
   arbitrary =
@@ -167,6 +194,9 @@ instance Arbitrary OrderTypeAD where
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Function where
+  arbitrary = QC.arbitraryBoundedEnum
+
+instance Arbitrary AggFunction where
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Bop where

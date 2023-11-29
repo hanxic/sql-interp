@@ -33,6 +33,7 @@ module Parser
     lookAhead,
     endOfWord,
     fullString,
+    {- maybeParse, -}
   )
 where
 
@@ -158,6 +159,12 @@ lookAhead :: Parser a -> Parser a
 lookAhead p = P $ \s -> do
   (c, cs) <- doParse p s
   return (c, s)
+
+{- maybeParse :: Parser a -> Parser a -> Parser a
+maybeParse p1 pDefault =
+  p1 <|> pDefault
+ -}
+{- (lookAhead p1 *> p1) <|> pDefault -}
 
 -- | End of Word
 endOfWord :: Parser ()
