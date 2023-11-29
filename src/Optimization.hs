@@ -3,10 +3,9 @@ module Optimization where
 import Interpretation
 import SQLSyntax
 import Test.QuickCheck as QC
-import Test.QuickCheck qualified as QC
 
 data AST
-  = Node AST Command AST
+  = Node AST Query AST
   | Empty
   deriving (Eq, Show)
 
@@ -15,13 +14,13 @@ data AST
 emptyAST :: AST
 emptyAST = Empty
 
-singleton :: Command -> AST
+singleton :: Query -> AST
 singleton c = insert c emptyAST
 
-insert :: Command -> AST -> AST
+insert :: Query -> AST -> AST
 insert c t = undefined
 
-fromList :: [Command] -> AST
+fromList :: [Query] -> AST
 fromList = foldr insert emptyAST
 
 evalAST :: AST -> TableMap
@@ -42,37 +41,17 @@ optimizeCascProjection = undefined
 combineSelectJoin :: AST -> AST
 combineSelectJoin = undefined
 
-instance Arbitrary AST where
-  arbitrary :: Gen AST
-  arbitrary = QC.listOf (arbitrary :: Gen Command) >>= \xs -> return (fromList xs)
+instance Arbitrary Query where
+  arbitrary :: Gen Query
+  arbitrary = undefined
 
-  shrink :: AST -> [AST]
-  shrink (Node l _ r) = [l, r]
-  shrink _ = []
+  shrink :: Query -> [Query]
+  shrink = undefined
 
-prop_valid :: TableMap -> Bool
-prop_valid = undefined
+instance Eq Query where
+  (==) :: Query -> Query -> Bool
+  _ == _ = undefined
 
-prop_optimizeSelectAll :: AST -> Bool
-prop_optimizeSelectAll t = optimizeSelectAll t == t
-
-prop_optimizeCascSelect :: AST -> Bool
-prop_optimizeCascSelect t = optimizeSelectAll t == t
-
-prop_optimizeCommSelect :: AST -> Bool
-prop_optimizeCommSelect t = optimizeSelectAll t == t
-
-prop_optimizeCascProjection :: AST -> Bool
-prop_optimizeCascProjection t = optimizeSelectAll t == t
-
-prop_combineSelectJoin :: AST -> Bool
-prop_combineSelectJoin t = optimizeSelectAll t == t
-
-prop_runtime :: AST -> Bool
-prop_runtime t = undefined
-
--- prop_runtime t = evalRunTime (optimize t) <= (evalRunTime t) + 0.0001
-
--- Notes:
---   - count the number of operations as a proxy for runtime
---   -
+instance Show Query where
+  show :: Query -> String
+  show = undefined
