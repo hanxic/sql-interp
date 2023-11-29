@@ -33,7 +33,9 @@ module Parser
     lookAhead,
     endOfWord,
     fullString,
-    {- maybeParse, -}
+    maybeParse,
+    anyChar,
+    anyWord,
   )
 where
 
@@ -144,6 +146,12 @@ underscore = char '_'
 char :: Char -> Parser Char
 char c = satisfy (c ==)
 
+anyChar :: Parser Char
+anyChar = filter (not . isSpace) (satisfy isPrint)
+
+anyWord :: Parser String
+anyWord = some anyChar
+
 -- | Parses and returns the specified character in a case insensitive fashion
 -- succeeds only if the input is exactly the character (case insensitve)
 charCI :: Char -> Parser Char
@@ -165,6 +173,10 @@ maybeParse p1 pDefault =
   p1 <|> pDefault
  -}
 {- (lookAhead p1 *> p1) <|> pDefault -}
+
+maybeParse :: Parser a -> Parser b -> Parser a -> Parser (Maybe b)
+maybeParse p1 pRet pDefault =
+  (p1 *> (Just <$> pRet)) <|> pDefault *> pure Nothing
 
 -- | End of Word
 endOfWord :: Parser ()

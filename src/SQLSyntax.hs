@@ -196,8 +196,8 @@ data SelectCommand = SelectCommand
     whSelect :: Maybe Expression,
     groupbySelect :: [Var],
     orderbySelect :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)],
-    limitSelect :: Int,
-    offsetSelect :: Int
+    limitSelect :: Maybe Int,
+    offsetSelect :: Maybe Int
   }
   deriving (Eq, Show)
 
@@ -272,7 +272,7 @@ reservedKeyWords =
     ]
 
 reservedChar :: String
-reservedChar = "\"'()`"
+reservedChar = "\"'()`;"
 
 {-
 What do we want to cover?
