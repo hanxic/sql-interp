@@ -8,8 +8,7 @@ import Test.QuickCheck qualified as QC
 data AST
   = Node AST Command AST
   | Empty
-
--- deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
 
 -- Optimization Source: https://www.analyticsvidhya.com/blog/2021/10/a-detailed-guide-on-sql-query-optimization/
 
@@ -25,19 +24,22 @@ insert c t = undefined
 fromList :: [Command] -> AST
 fromList = foldr insert emptyAST
 
-optimizeSelectAll :: TableMap -> TableMap
+evalAST :: AST -> TableMap
+evalAST t = undefined
+
+optimizeSelectAll :: AST -> AST
 optimizeSelectAll = undefined
 
-optimizeCascSelect :: TableMap -> TableMap
+optimizeCascSelect :: AST -> AST
 optimizeCascSelect = undefined
 
-optimizeCommSelect :: TableMap -> TableMap
+optimizeCommSelect :: AST -> AST
 optimizeCommSelect = undefined
 
-optimizeCascProjection :: TableMap -> TableMap
+optimizeCascProjection :: AST -> AST
 optimizeCascProjection = undefined
 
-combineSelectJoin :: TableMap -> TableMap
+combineSelectJoin :: AST -> AST
 combineSelectJoin = undefined
 
 instance Arbitrary AST where
@@ -51,21 +53,26 @@ instance Arbitrary AST where
 prop_valid :: TableMap -> Bool
 prop_valid = undefined
 
-prop_optimizeSelectAll :: TableMap -> Bool
+prop_optimizeSelectAll :: AST -> Bool
 prop_optimizeSelectAll t = optimizeSelectAll t == t
 
-prop_optimizeCascSelect :: TableMap -> Bool
+prop_optimizeCascSelect :: AST -> Bool
 prop_optimizeCascSelect t = optimizeSelectAll t == t
 
-prop_optimizeCommSelect :: TableMap -> Bool
+prop_optimizeCommSelect :: AST -> Bool
 prop_optimizeCommSelect t = optimizeSelectAll t == t
 
-prop_optimizeCascProjection :: TableMap -> Bool
+prop_optimizeCascProjection :: AST -> Bool
 prop_optimizeCascProjection t = optimizeSelectAll t == t
 
-prop_combineSelectJoin :: TableMap -> Bool
+prop_combineSelectJoin :: AST -> Bool
 prop_combineSelectJoin t = optimizeSelectAll t == t
 
-prop_runtime :: TableMap -> Bool
+prop_runtime :: AST -> Bool
 prop_runtime t = undefined
+
 -- prop_runtime t = evalRunTime (optimize t) <= (evalRunTime t) + 0.0001
+
+-- Notes:
+--   - count the number of operations as a proxy for runtime
+--   -
