@@ -4,6 +4,7 @@ import Control.Monad (mapM_)
 import Data.Char qualified as Char
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Sequence.Internal.Sorting (Queue (Q))
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
@@ -18,67 +19,28 @@ data Query
 Grammar Source: https://www.dataquest.io/blog/sql-commands/
 Optimization Source: https://www.analyticsvidhya.com/blog/2021/10/a-detailed-guide-on-sql-query-optimization/
 Relational Algebra: https://byjus.com/gate/relational-algebra-in-dbms-notes/#:~:text=Calculus%20(or%20DRC)-,What%20is%20Relational%20Algebra%20in%20DBMS%3F,unary%20operator%20can%20be%20used
-Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/EquivalenceRules.pdf
+Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/EquivalenceRules.pdf -}
 
-Wyatt Jobs:
-  - Read up on LuStepper, relational algebra, sql query optimization
-  - Given command, update the TableMap
-  - Define TableMap and ops [insert, append, singleton, empty, delete, search?]
-  - Stretch loose optimization stuff
-      - remove duplicates
-      - search for col name -> if name never shows up delete col
-      - parallelize if col ops are independent of other ops
-      - flatten nested select ops
+-- Need to add offset into the syntax
 
-Timeline:
-  - TA Checkin #1 wed-fri?
-      - parser
-      - TableMap datastructure
-      - interpretation
-      - TESTING for everything (arbitrary + some unit tests)
-      - optimization definitions??
+-- ******** Construct for SQL Syntax ********
 
--}
-
-type Name = String
-
-data Command = Command
-  { verb :: Verb, -- none empty
-    from :: Command,
-    wh :: ConditionalStatement
-  }
+data ColumnExpression
+  = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2) / SELECT SUM(A) / SELECT SUM(2)
+  | ColumnAlias Expression Var -- e.g. SELECT A AS B
   deriving (Eq, Show)
 
-data Verb
-  = Select [Expression]
-  | Insert [Expression]
-  | Delete
-  | Drop
-  deriving (Eq, Show)
-
---  | Create [FieldName]
---  | Update [Expression]
---  | AlterTable [AlterTableCommand]
-
--- data AlterTableCommand = Add | Drop
-
-data DType
-  = StringType
-  | IntType
-  | BoolType
-  | NullType
-  deriving (Eq, Show)
+data CountStyle
+  = Distinct
+  | All
+  deriving (Eq, Show, Enum, Bounded)
 
 type TableName = String
 
-type FieldName = (String, DType)
-
-data VerbStatement
-  = Distinct Expression
-  | Into Expression
-  | Expr Expression
-  | As Expression Expression
-  | Set FieldName Expression
+data FromExpression
+  = Table TableName -- e.g. FROM TEST
+  | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
+  | Join JoinStyle FromExpression FromExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle
@@ -112,28 +74,11 @@ data Expression
   | Fun Function CountStyle Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
-data ConditionalStatement
-  = GroupBy
-  | Join
-  | OrderBy Expression Order
-  | Top Expression
-  | Offset Expression
-  | Fetch Expression
+data Var
+  = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
+  | QuotedName Name -- Quoted, can be anything
+  | AllVar
   deriving (Eq, Show)
-
-data Expression
-  = Var Var
-  | Value Value
-  | Op1 Uop Expression
-  | Op2 Expression Bop Expression
-  deriving (Eq, Show)
-
-instance Arbitrary Expression where
-  arbitrary :: Gen Expression
-  arbitrary = undefined
-
-  shrink :: Expression -> [Expression]
-  shrink c = undefined
 
 data Uop
   = Not
@@ -174,13 +119,11 @@ data DType
   | BoolType
   deriving (Eq, Show)
 
-type Var = Name
-
-data Value
+data DValue
   = IntVal Int
   | BoolVal Bool
   | StringVal String
-  | Null
+  | NullVal
   deriving (Eq, Show, Ord)
 
 type Name = String
