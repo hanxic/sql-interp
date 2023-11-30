@@ -40,7 +40,7 @@ type TableName = String
 data FromExpression
   = Table TableName -- e.g. FROM TEST
   | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
-  | Join JoinStyle FromExpression FromExpression -- e.g. FROM A JOIN B
+  | Join FromExpression JoinStyle FromExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle

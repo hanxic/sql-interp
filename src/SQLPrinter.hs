@@ -141,7 +141,7 @@ isBaseFromExpression _ = False
 instance PP FromExpression where
   pp (Table texp) = pp texp
   pp (SubQuery sc) = PP.parens $ pp sc
-  pp (Join js fexp1 fexp2) =
+  pp (Join fexp1 js fexp2) =
     let ppExp1 =
           if isBaseFromExpression fexp1
             then pp fexp1

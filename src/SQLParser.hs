@@ -401,8 +401,25 @@ catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.any
 exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
 exprsSelectP = undefined
 
+joinStyleP :: Parser JoinStyle
+joinStyleP = str2JoinStyle <$> wsP (P.choice (map P.string ["LEFT JOIN", "RIGHT JOIN", "OUTER JOIN", "JOIN"]))
+  where
+    str2JoinStyle :: String -> JoinStyle
+    str2JoinStyle str =
+      case str of
+        "LEFT JOIN" -> LeftJoin
+        "RIGHT JOIN" -> RightJoin
+        "JOIN" -> InnerJoin
+        _ -> OuterJoin
+
 fromSelectP :: Parser FromExpression
-fromSelectP = undefined
+fromSelectP =
+  Table
+    <$> P.filter
+      (`notElem` reservedKeyWords)
+      nameP
+    <|> SubQuery <$> parens selectCommandP
+    <|> Join <$> fromSelectP <*> joinStyleP <*> fromSelectP
 
 whSelectP :: Parser (Maybe Expression)
 whSelectP =
@@ -483,6 +500,9 @@ test_offsetSelectP =
       P.parse offsetSelectP "   " ~?= errorMsgUnitTest,
       P.parse offsetSelectP " ;" ~?= Right Nothing
     ]
+
+selectCommandP :: Parser SelectCommand
+selectCommandP = undefined
 
 scP :: Parser SelectCommand
 scP = undefined
