@@ -3,21 +3,21 @@
 module Interpretation where
 
 import Data.List as List
-import Data.Map as Map
--- import Data.Map.Ordered as OMap
+import Data.List.NonEmpty qualified as NE
+import Data.Map.Ordered as OMap
 import Data.Set as Set
 import SQLSyntax
 import TableSyntax
 import Test.QuickCheck
 
 emptyScope :: Scope
-emptyScope = Map.empty
+emptyScope = OMap.empty
 
 emptyTableMap :: TableMap
-emptyTableMap = Map.empty
+emptyTableMap = OMap.empty
 
 emptyIndexName :: IndexName
-emptyIndexName = SingleName ""
+emptyIndexName = NE.singleton ""
 
 emptyTable :: Table
 emptyTable =
@@ -28,25 +28,22 @@ emptyTable =
     }
 
 emptyRow :: Row
-emptyRow = Map.empty
+emptyRow = OMap.empty
 
 tableFMap :: (Row -> Row) -> Table -> Table
-tableFMap f t = t {tableMap = Map.map f (tableMap t)}
-
-tableMapMaybe :: (Row -> Maybe Row) -> Table -> Table
-tableMapMaybe f t = t {tableMap = Map.mapMaybe f (tableMap t)}
+tableFMap f t = t {tableMap = fmap f (tableMap t)}
 
 tableMapEither :: (Row -> Either ErrorMsg Row) -> Table -> Either ErrorMsg Table
 tableMapEither f t = do
+  let lst_tm = assoc $ tableMap t
   tm <-
-    Map.foldlWithKey
-      ( \t' k r -> do
+    foldl
+      ( \t' r -> do
           t'' <- t'
           r' <- f r
-          Right $ Map.insert k r' t''
+          Right t''
       )
       (Right emptyTableMap)
-      (tableMap t)
   return $ t {tableMap = tm}
 
 -- Evaluates Query
@@ -85,10 +82,10 @@ evalListColumnExpr l r =
 evalColumnExpr :: ColumnExpression -> Row -> Either ErrorMsg Row
 evalColumnExpr (ColumnName e) r = do
   v <- evalExpression e r
-  Right $ Map.singleton (show e) v
+  Right $ OMap.singleton (show e, v)
 evalColumnExpr (ColumnAlias e n) r = do
   v <- evalExpression e r
-  Right $ Map.singleton (show n) v
+  Right $ OMap.singleton (show n, v)
 evalColumnExpr AllVar r = Right r
 
 -- Evaluates Where
@@ -104,37 +101,41 @@ evalWhereBool e r = case evalExpression e r of
   _ -> Left "Where clause is not a boolean expression"
 
 -- Evaluates GroupBy
-evalGroupBy :: [Var] -> Table -> Table
-evalGroupBy [] t = t
+evalGroupBy :: [Var] -> Table -> Either ErrorMsg GroupByMap
+evalGroupBy [] t = undefined
 evalGroupBy (v : vs) t = undefined
 
 -- Evaluates From
 evalFrom :: FromExpression -> Scope -> Either ErrorMsg Table
-evalFrom (TableRef name) sc = case Map.lookup name sc of
+evalFrom (TableRef name) sc = case OMap.lookup name sc of
   Just t -> Right t
   Nothing -> Left $ "Table '" ++ name ++ "' does not exist in scope"
 evalFrom (SubQuery q) sc = evalSelect q sc
-evalFrom (Join f1 st f2) sc = do
+evalFrom (Join st (UnamedJoin f1 f2)) sc = do
+  t1 <- evalFrom f1 sc
+  t2 <- evalFrom f2 sc
+  evalJoin st t1 t2
+evalFrom (Join st (NamedJoin f1 f2 i1 i2)) sc = do
   t1 <- evalFrom f1 sc
   t2 <- evalFrom f2 sc
   evalJoin st t1 t2
 
 -- Evaluates Joins
 evalJoin :: JoinStyle -> Table -> Table -> Either ErrorMsg Table
-evalJoin = undefined
+evalJoin s t1 t2 = undefined
 
 evalJoinMap :: JoinStyle -> TableMap -> TableMap -> Either ErrorMsg TableMap
 evalJoinMap InnerJoin t1 t2 =
   Right $
-    Map.intersectionWith
-      ( \x y -> Map.union (appendKey "_x" x) (appendKey "_y" y)
+    OMap.intersectionWith
+      ( \x y -> OMap.union (appendKey "_x" x) (appendKey "_y" y)
       )
       t1
       t2
 evalJoinMap s _ _ = Left $ "unimplemented joinstyle '" ++ show s
 
 appendKey :: String -> Row -> Row
-appendKey s = Map.foldlWithKey (\n k v -> n <> Map.singleton (k ++ s) v) emptyRow
+appendKey s = OMap.foldlWithKey (\n k v -> n <> OMap.singleton (k ++ s, v)) emptyRow
 
 -- Sorts Table
 evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> Table -> Either ErrorMsg Table
@@ -142,8 +143,8 @@ evalSort _ _ = undefined
 
 -- Slices Table
 evalLimitOffset :: Maybe Int -> Maybe Int -> Table -> Table
-evalLimitOffset (Just l) (Just o) t = t {tableMap = Map.take l $ Map.drop o (tableMap t)}
-evalLimitOffset (Just l) Nothing t = t {tableMap = Map.take l (tableMap t)}
+evalLimitOffset (Just l) (Just o) t = t {tableMap = OMap.take l $ OMap.drop o (tableMap t)}
+evalLimitOffset (Just l) Nothing t = t {tableMap = OMap.take l (tableMap t)}
 evalLimitOffset Nothing _ t = t
 
 -- Evaluates DeleteCommand
@@ -171,7 +172,7 @@ evalExpression (AggFun f _ exp) r = Left $ "Cannot call Aggregation Function '" 
 evalExpression (SQLSyntax.Fun f exp) r = Left $ "Cannot call Function '" ++ show f ++ "' on row"
 
 evalVar :: Var -> Row -> Either ErrorMsg DValue
-evalVar (VarName s) r = case Map.lookup s r of
+evalVar (VarName s) r = case OMap.lookup s r of
   Just v -> Right v
   Nothing -> Left $ "No column named '" ++ s ++ "'"
 evalVar (QuotedName s) r = undefined

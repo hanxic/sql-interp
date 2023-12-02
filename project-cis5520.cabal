@@ -25,13 +25,13 @@ common common-stanza
     , HUnit 
     , QuickCheck
     , containers
+    , ordered-containers
     , filepath
     , pretty
     , network
     , directory
     , random
     , mtl
-    , ordered-containers
   default-language:
     GHC2021
   default-extensions:
@@ -72,10 +72,9 @@ test-suite project-cis5520-test
   type: 
       exitcode-stdio-1.0
   main-is: 
-      TestGen.hs
+      Spec.hs
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       project-cis5520
-

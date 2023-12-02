@@ -1,9 +1,12 @@
+{-# LANGUAGE OverloadedLists #-}
+
 module SQLSyntax where
 
 import Control.Monad (mapM_)
 import Data.Char qualified as Char
-import Data.Map (Map)
-import Data.Map qualified as Map
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as NE
+import Data.Map
 import Data.Sequence.Internal.Sorting (Queue (Q))
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
@@ -42,7 +45,7 @@ data FromExpression
   = TableRef TableName -- e.g. FROM TEST
   | -- | TableAlias TableName Var -- e.g. FROM A AS B
     SubQuery SelectCommand -- e.g. FROM (SELECT ...)
-  | Join FromExpression JoinStyle FromExpression -- e.g. FROM A JOIN B
+  | Join JoinStyle JoinExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle
@@ -52,7 +55,12 @@ data JoinStyle
   | OuterJoin
   deriving (Eq, Show, Enum, Bounded)
 
-data JoinExpression = FromExpression 
+data JoinExpression
+  = UnamedJoin FromExpression FromExpression
+  | NamedJoin FromExpression FromExpression JoinName JoinName
+  deriving (Eq, Show)
+
+type JoinName = NE.NonEmpty Name
 
 isBase :: Expression -> Bool
 isBase Val {} = True
@@ -178,7 +186,7 @@ data UpsertIntoCommand = UpsertIntoCommand
 -- **** Section for DeleteCommand ****
 
 data DeleteCommand = DeleteCommand
-  { fromDelete :: TableName,
+  { fromDelete :: FromExpression,
     whDelete :: Maybe Expression
   }
   deriving (Eq, Show)
@@ -260,7 +268,7 @@ reservedOrderTypeFL = ["NULLS", "FIRST", "LAST"]
 
 reservedKeyWords :: [String]
 reservedKeyWords =
-  concat
+  List.concat
     [ reservedVerb,
       reservedCountStyle,
       reservedJoinStyle,
