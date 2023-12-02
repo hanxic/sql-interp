@@ -4,6 +4,7 @@ module Interpretation where
 
 import Data.List as List
 import Data.Map as Map
+-- import Data.Map.Ordered as OMap
 import Data.Set as Set
 import SQLSyntax
 import TableSyntax
@@ -151,8 +152,8 @@ evalExpression (Op2 e1 o e2) r = do
   v1 <- evalExpression e1 r
   v2 <- evalExpression e2 r
   evalBop v1 o v2
-evalExpression (AggFun f _ exp) r = undefined
-evalExpression (SQLSyntax.Fun f exp) r = undefined
+evalExpression (AggFun f _ exp) r = evalAggFunction f exp
+evalExpression (SQLSyntax.Fun f exp) r = evalFunction f exp
 
 evalVar :: Var -> Row -> Either ErrorMsg DValue
 evalVar (VarName s) r = case Map.lookup s r of
