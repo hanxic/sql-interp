@@ -77,7 +77,7 @@ evalListColumnExpr l r =
     ( \n x -> do
         n' <- n
         r' <- evalColumnExpr x r
-        Right $ Map.union r' n'
+        Right $ n' <> r'
     )
     (Right emptyRow)
     l
@@ -100,11 +100,13 @@ evalWhereBool :: Expression -> Row -> Either ErrorMsg Row
 evalWhereBool e r = case evalExpression e r of
   Right (BoolVal b) | b -> Right r
   Right (BoolVal b) | not b -> Right emptyRow
+  Left s -> Left s
   _ -> Left "Where clause is not a boolean expression"
 
 -- Evaluates GroupBy
 evalGroupBy :: [Var] -> Table -> Table
-evalGroupBy vs t = undefined
+evalGroupBy [] t = t
+evalGroupBy (v : vs) t = undefined
 
 -- Evaluates From
 evalFrom :: FromExpression -> Scope -> Either ErrorMsg Table
@@ -115,11 +117,24 @@ evalFrom (SubQuery q) sc = evalSelect q sc
 evalFrom (Join f1 st f2) sc = do
   t1 <- evalFrom f1 sc
   t2 <- evalFrom f2 sc
-  return $ evalJoin st t1 t2
+  evalJoin st t1 t2
 
 -- Evaluates Joins
-evalJoin :: JoinStyle -> Table -> Table -> Table
+evalJoin :: JoinStyle -> Table -> Table -> Either ErrorMsg Table
 evalJoin = undefined
+
+evalJoinMap :: JoinStyle -> TableMap -> TableMap -> Either ErrorMsg TableMap
+evalJoinMap InnerJoin t1 t2 =
+  Right $
+    Map.intersectionWith
+      ( \x y -> Map.union (appendKey "_x" x) (appendKey "_y" y)
+      )
+      t1
+      t2
+evalJoinMap s _ _ = Left $ "unimplemented joinstyle '" ++ show s
+
+appendKey :: String -> Row -> Row
+appendKey s = Map.foldlWithKey (\n k v -> n <> Map.singleton (k ++ s) v) emptyRow
 
 -- Sorts Table
 evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> Table -> Either ErrorMsg Table
@@ -152,8 +167,8 @@ evalExpression (Op2 e1 o e2) r = do
   v1 <- evalExpression e1 r
   v2 <- evalExpression e2 r
   evalBop v1 o v2
-evalExpression (AggFun f _ exp) r = evalAggFunction f exp
-evalExpression (SQLSyntax.Fun f exp) r = evalFunction f exp
+evalExpression (AggFun f _ exp) r = Left $ "Cannot call Aggregation Function '" ++ show f ++ "' on row"
+evalExpression (SQLSyntax.Fun f exp) r = Left $ "Cannot call Function '" ++ show f ++ "' on row"
 
 evalVar :: Var -> Row -> Either ErrorMsg DValue
 evalVar (VarName s) r = case Map.lookup s r of

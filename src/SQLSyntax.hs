@@ -52,6 +52,8 @@ data JoinStyle
   | OuterJoin
   deriving (Eq, Show, Enum, Bounded)
 
+data JoinExpression = FromExpression 
+
 isBase :: Expression -> Bool
 isBase Val {} = True
 isBase Var {} = True
