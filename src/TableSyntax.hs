@@ -1,13 +1,35 @@
+{-# LANGUAGE GADTs #-}
+
 module TableSyntax where
 
-import Data.Map (Map)
-import Data.Map qualified as Map
+import Data.Kind
+import Data.Map as Map
 import SQLSyntax
 
-type Id = String
+type Scope = Map TableName Table
 
-type Table = Map Id Row
+data Table = Table
+  { indexName :: IndexName,
+    orderName :: IndexName,
+    tableMap :: TableMap
+  }
 
-type Column = String
+type TableMap = Map Index Row
 
-type Row = Map Var DValue
+type Row = Map Name DValue
+
+type ErrorMsg = String
+
+data IndexName where
+  SingleName :: Name -> IndexName
+  MultiName :: Name -> IndexName -> IndexName
+  deriving (Show, Eq, Ord)
+
+data Index where
+  SingleIndex :: DValue -> Index
+  MultiIndex :: DValue -> Index -> Index
+  deriving (Show, Eq, Ord)
+
+data GroupBy a where
+  SingleGroupBy :: DValue -> GroupBy DValue
+  MultiGroupBy :: DValue -> GroupBy a -> GroupBy a

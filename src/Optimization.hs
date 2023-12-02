@@ -2,6 +2,7 @@ module Optimization where
 
 import Interpretation
 import SQLSyntax
+import TableSyntax
 import Test.QuickCheck as QC
 
 data AST

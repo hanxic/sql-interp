@@ -28,6 +28,7 @@ Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/Equiva
 data ColumnExpression
   = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2) / SELECT SUM(A) / SELECT SUM(2)
   | ColumnAlias Expression Var -- e.g. SELECT A AS B
+  | AllVar
   deriving (Eq, Show)
 
 data CountStyle
@@ -39,8 +40,9 @@ type TableName = String
 
 data FromExpression
   = TableRef TableName -- e.g. FROM TEST
-  | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
-  | Join JoinStyle FromExpression FromExpression -- e.g. FROM A JOIN B
+  | -- | TableAlias TableName Var -- e.g. FROM A AS B
+    SubQuery SelectCommand -- e.g. FROM (SELECT ...)
+  | Join FromExpression JoinStyle FromExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle
@@ -55,29 +57,37 @@ isBase Val {} = True
 isBase Var {} = True
 isBase Op1 {} = True
 isBase Fun {} = True
+isBase AggFun {} = True
 isBase _ = False
 
 level :: Bop -> Int
-level Or = 9
+level Times = 20
+level Divide = 20
+level Modulo = 20
+level Plus = 17
+level Minus = 17
+level Eq = 15
+level Gt = 15
+level Ge = 15
+level Lt = 15
+level Le = 15
+level Is = 15
+level Like = 15
 level And = 8
-level Times = 7
-level Divide = 7
-level Plus = 5
-level Minus = 5
-level _ = 3
+level Or = 7
 
 data Expression
   = Var Var -- e.g. A
   | Val DValue
   | Op1 Uop Expression -- e.g. NOT A
   | Op2 Expression Bop Expression -- e.g. A + 2
-  | Fun Function CountStyle Expression -- e.g. SUM / AVG
+  | AggFun AggFunction CountStyle Expression
+  | Fun Function Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
 data Var
   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
   | QuotedName Name -- Quoted, can be anything
-  | AllVar
   deriving (Eq, Show)
 
 data Uop
@@ -102,13 +112,16 @@ data Bop
   | Is
   deriving (Eq, Show, Enum, Bounded)
 
-data Function
+data AggFunction
   = Avg
   | Count
   | Max
   | Min
   | Sum
-  | Len
+  deriving (Eq, Show, Enum, Bounded)
+
+data Function
+  = Len
   | Lower
   | Upper
   deriving (Eq, Show, Enum, Bounded)
@@ -163,7 +176,7 @@ data UpsertIntoCommand = UpsertIntoCommand
 -- **** Section for DeleteCommand ****
 
 data DeleteCommand = DeleteCommand
-  { fromDelete :: FromExpression,
+  { fromDelete :: TableName,
     whDelete :: Maybe Expression
   }
   deriving (Eq, Show)
@@ -171,8 +184,9 @@ data DeleteCommand = DeleteCommand
 -- **** Section for CreateCommand ****
 
 data CreateCommand = CreateCommand
-  { nameCreate :: TableName,
-    idCreate :: [(Name, DType)]
+  { ifNotExists :: Bool,
+    nameCreate :: TableName,
+    idCreate :: [(Name, DType, Bool, Bool)]
     -- TODO: Haven't finished
   }
   deriving (Eq, Show)
@@ -185,8 +199,8 @@ data SelectCommand = SelectCommand
     whSelect :: Maybe Expression,
     groupbySelect :: [Var],
     orderbySelect :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)],
-    limitSelect :: Int,
-    offsetSelect :: Int
+    limitSelect :: Maybe Int,
+    offsetSelect :: Maybe Int
   }
   deriving (Eq, Show)
 
@@ -212,8 +226,11 @@ reservedCountStyle = ["DISTINCT"]
 reservedJoinStyle :: [String]
 reservedJoinStyle = ["JOIN", "LEFT", "RIGHT", "INNER", "OUTER"]
 
+reservedAggFunction :: [String]
+reservedAggFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM"]
+
 reservedFunction :: [String]
-reservedFunction = ["AVG", "COUNT", "MAX", "MIN", "SUM", "LEN", "LOWER", "UPPER"]
+reservedFunction = ["LENGTH", "LOWER", "UPPER"]
 
 reservedBopS :: [String]
 reservedBopS = ["+", "-", "*", "//", "%", "=", ">=", "<=", ">", "<"]
@@ -245,6 +262,7 @@ reservedKeyWords =
     [ reservedVerb,
       reservedCountStyle,
       reservedJoinStyle,
+      reservedAggFunction,
       reservedFunction,
       reservedBopS,
       reservedBopW,
@@ -256,6 +274,9 @@ reservedKeyWords =
       reservedOrderTypeFL
     ]
 
+reservedChar :: String
+reservedChar = "\"'()`;"
+
 {-
 What do we want to cover?
 SELECT [expression]
@@ -266,7 +287,6 @@ GROUP BY
 HAVING
 JOIN
 -}
-
 {-
 Must have a select, and must have a from
 The rest are optional...Applicative
