@@ -39,7 +39,8 @@ type TableName = String
 
 data FromExpression
   = Table TableName -- e.g. FROM TEST
-  | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
+  | -- | TableAlias TableName Var -- e.g. FROM A AS B
+    SubQuery SelectCommand -- e.g. FROM (SELECT ...)
   | Join FromExpression JoinStyle FromExpression -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
@@ -55,6 +56,7 @@ isBase Val {} = True
 isBase Var {} = True
 isBase Op1 {} = True
 isBase Fun {} = True
+isBase AggFun {} = True
 isBase _ = False
 
 level :: Bop -> Int
@@ -70,8 +72,8 @@ level Lt = 15
 level Le = 15
 level Is = 15
 level Like = 15
-level Or = 8
-level And = 7
+level And = 8
+level Or = 7
 
 data Expression
   = Var Var -- e.g. A

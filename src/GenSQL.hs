@@ -1,6 +1,6 @@
 module GenSQL where
 
-import Control.Monad (liftM2, liftM3, mapM_)
+import Control.Monad (liftM2, liftM3, mapM_, replicateM)
 import Data.Char qualified as Char
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -66,6 +66,13 @@ genTablePool :: Gen [TableName]
 genTablePool = do
   i <- QC.chooseInt (1, maxSize)
   return ["Table" ++ show j | j <- [0, i]]
+
+genVarWOAllVar :: Gen Var
+genVarWOAllVar =
+  QC.frequency
+    [ (1, VarName <$> (QC.elements =<< genNamePool)),
+      (1, QuotedName <$> (QC.elements =<< genNamePool))
+    ]
 
 instance Arbitrary Var where
   arbitrary =
@@ -171,20 +178,52 @@ instance Arbitrary FromExpression where
 instance Arbitrary ColumnExpression where
   arbitrary =
     QC.frequency
-      [ (1, ColumnName <$> arbitrary),
-        (1, ColumnAlias <$> arbitrary <*> arbitrary) -- This will cause some problem if alias is something that is invalid
+      [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
+        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> genVarWOAllVar) -- This will cause some problem if alias is something that is invalid
       ]
+
+patchWVar :: Expression -> Gen Expression
+patchWVar e@(Var _) = return e
+patchWVar (Val _) = Var <$> arbitrary
+patchWVar (Op1 u e) = patchWVar e
+patchWVar (Op2 e1 u e2) =
+  arbitrary
+    >>= ( \b ->
+            if b
+              then Op2 <$> patchWVar e1 <*> return u <*> return e2
+              else Op2 e1 u <$> patchWVar e2
+        )
+patchWVar (AggFun af cs e) = AggFun af cs <$> patchWVar e
+patchWVar (Fun f e) = Fun f <$> patchWVar e
+
+constrainSize :: Int -> Gen a -> Gen [a]
+constrainSize n g | n <= 0 = (: []) <$> g
+constrainSize n g = do
+  x <- g
+  xs <- constrainSize n' g
+  return $ x : xs
+  where
+    n' = n `div` 2
+
+test5 = QC.sample (QC.sized (`constrainSize` (QC.arbitrary :: Gen ColumnExpression)))
 
 instance Arbitrary SelectCommand where
   arbitrary =
     SelectCommand
-      <$> arbitrary
+      <$> atLeastN 1 arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> QC.sized (`constrainSize` arbitrary)
+      <*> QC.sized (`constrainSize` arbitrary)
       <*> arbitrary
       <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
+
+atLeastN :: Int -> Gen a -> Gen [a]
+atLeastN i g = do
+  n <- QC.sized (\n -> QC.chooseInt (i, n))
+  constrainSize n g
+
+{- arbitrary >>= (`replicateM` g) . QC.getPositive -}
 
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where

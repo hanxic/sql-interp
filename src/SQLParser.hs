@@ -398,8 +398,27 @@ catchAnyWord kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.anyW
 catchAnyWordL :: String -> Parser [a] -> Parser [a]
 catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.anyWord)))
 
+columnExpressionP :: Parser ColumnExpression
+columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> P.filter (/= AllVar) varP) <|> ColumnName <$> expP
+
 exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
-exprsSelectP = undefined
+exprsSelectP =
+  wsP (P.string exprsSelectKW) *> P.sepBy1 (exprsSelectPAux <|> parens exprsSelectPAux) P.comma
+  where
+    exprsSelectKW = "SELECT"
+    exprsSelectPAux :: Parser (CountStyle, ColumnExpression)
+    exprsSelectPAux = (,) <$> countStyleP <*> columnExpressionP
+
+test_exprsSelectP :: Test
+test_exprsSelectP =
+  TestList
+    [ P.parse exprsSelectP "SELECT A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
+      P.parse exprsSelectP "SELECT A AS \"Something else\"" ~?= Right [(All, ColumnAlias (Var $ VarName "A") (QuotedName "Something else"))],
+      P.parse exprsSelectP "SELECT DISTINCT A AS \"Something else\"" ~?= Right [(Distinct, ColumnAlias (Var $ VarName "A") (QuotedName "Something else"))],
+      P.parse exprsSelectP "SELECT A A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
+      P.parse exprsSelectP "SELECT A AS \"Something else\", B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") (QuotedName "Something else")), (All, ColumnAlias (Var $ VarName "B") (VarName "C"))],
+      P.parse exprsSelectP "SELECT" ~?= errorMsgUnitTest
+    ]
 
 joinStyleP :: Parser JoinStyle
 joinStyleP = str2JoinStyle <$> wsP (P.choice (map P.string ["LEFT JOIN", "RIGHT JOIN", "OUTER JOIN", "JOIN"]))
@@ -412,14 +431,32 @@ joinStyleP = str2JoinStyle <$> wsP (P.choice (map P.string ["LEFT JOIN", "RIGHT 
         "JOIN" -> InnerJoin
         _ -> OuterJoin
 
+fromSelectPAux :: Parser FromExpression
+fromSelectPAux = joinP
+  where
+    joinP = baseP `P.chainl1` joinPAux
+    joinPAux = flip Join <$> joinStyleP
+    baseP =
+      Table
+        <$> P.filter
+          (`notElem` reservedKeyWords)
+          nameP
+        <|> SubQuery <$> parens scP
+        <|> parens fromSelectPAux
+
+{- opAtLevel :: Int -> Parser (Expression -> Expression -> Expression)
+opAtLevel l = flip Op2 <$> P.filter (\x -> level x == l) bopP-}
+
 fromSelectP :: Parser FromExpression
-fromSelectP =
-  Table
-    <$> P.filter
-      (`notElem` reservedKeyWords)
-      nameP
-    <|> SubQuery <$> parens selectCommandP
-    <|> Join <$> fromSelectP <*> joinStyleP <*> fromSelectP
+fromSelectP = wsP (P.string "FROM") *> fromSelectPAux
+
+test_fromSelectP :: Test
+test_fromSelectP =
+  TestList
+    [ P.parse fromSelectP "FROM A" ~?= Right (Table "A"),
+      P.parse fromSelectP "FROM A JOIN B" ~?= Right (Join (Table "A") InnerJoin (Table "B")),
+      P.parse fromSelectP "FROM A JOIN B LEFT JOIN C" ~?= Right (Join (Join (Table "A") InnerJoin (Table "B")) LeftJoin (Table "C"))
+    ]
 
 whSelectP :: Parser (Maybe Expression)
 whSelectP =
@@ -501,11 +538,70 @@ test_offsetSelectP =
       P.parse offsetSelectP " ;" ~?= Right Nothing
     ]
 
-selectCommandP :: Parser SelectCommand
-selectCommandP = undefined
-
 scP :: Parser SelectCommand
-scP = undefined
+scP = SelectCommand <$> exprsSelectP <*> fromSelectP <*> whSelectP <*> groupbySelectP <*> orderbySelectP <*> limitSelectP <*> offsetSelectP
+
+test7 =
+  SelectCommand
+    { exprsSelect = [(Distinct, ColumnName (AggFun Count Distinct (Var (VarName "Var0")))), (All, ColumnAlias (Var AllVar) (QuotedName "Var3")), (Distinct, ColumnName (Op2 (Fun Lower (Var (VarName "Var0"))) Is (Op1 Not (Fun Upper (Var (QuotedName "Var0")))))), (Distinct, ColumnName (Op2 (Op1 Not (AggFun Sum All (Var AllVar))) Le (Fun Lower (Var AllVar)))), (All, ColumnName (AggFun Avg Distinct (Var (QuotedName "Var0"))))],
+      fromSelect = Table "Table0",
+      whSelect =
+        Just
+          ( Op2
+              ( Fun Lower (Val NullVal)
+              )
+              And
+              ( Op2
+                  ( Op1 Not (Op1 Neg (Val (IntVal 24)))
+                  )
+                  Or
+                  (AggFun Min Distinct (Var AllVar))
+              )
+          ),
+      groupbySelect = [VarName "Var2", VarName "Var1"],
+      orderbySelect = [(VarName "Var2", Just ASC, Just NULLSFIRST), (AllVar, Just ASC, Just NULLSFIRST), (VarName "Var0", Just ASC, Nothing), (VarName "Var0", Just ASC, Just NULLSLAST), (AllVar, Just DESC, Nothing), (AllVar, Just DESC, Nothing), (VarName "Var0", Nothing, Just NULLSLAST), (VarName "Var0", Just DESC, Just NULLSLAST), (QuotedName "Var0", Just ASC, Just NULLSLAST), (QuotedName "Var0", Just DESC, Just NULLSLAST), (AllVar, Just ASC, Just NULLSFIRST), (VarName "Var4", Just DESC, Just NULLSFIRST), (AllVar, Nothing, Nothing), (QuotedName "Var0", Just ASC, Just NULLSLAST), (QuotedName "Var1", Nothing, Just NULLSLAST)],
+      limitSelect = Just (-5),
+      offsetSelect = Just (-22)
+    }
+
+-- >>> SPP.pretty test7
+-- "SELECT DISTINCT COUNT(DISTINCT Var0), * AS \"Var3\", DISTINCT (LOWER(Var0) IS NOT UPPER(\"Var0\")), DISTINCT (NOT SUM(*) <= LOWER(*)), AVG(DISTINCT \"Var0\")\n FROM Table0\n WHERE LOWER(NULL) AND (NOT - 24 OR MIN(DISTINCT *))\n GROUP BY Var2, Var1\n ORDER BY Var2 ASC NULLS FIRST, * ASC NULLS FIRST, Var0 ASC, Var0 ASC NULLS LAST, * DESC, * DESC, Var0 NULLS LAST, Var0 DESC NULLS LAST, \"Var0\" ASC NULLS LAST, \"Var0\" DESC NULLS LAST, * ASC NULLS FIRST, Var4 DESC NULLS FIRST, *, \"Var0\" ASC NULLS LAST, \"Var1\" NULLS LAST\n LIMIT -5\n OFFSET -22;"
+
+test8 = "SELECT DISTINCT COUNT(DISTINCT Var0), * AS \"Var3\", DISTINCT (LOWER(Var0) IS NOT UPPER(\"Var0\")), DISTINCT (NOT SUM(*) <= LOWER(*)), AVG(DISTINCT \"Var0\")\n FROM Table0\n WHERE LOWER(NULL) AND (NOT - 24 OR MIN(DISTINCT *))\n GROUP BY Var2, Var1\n ORDER BY Var2 ASC NULLS FIRST, * ASC NULLS FIRST, Var0 ASC, Var0 ASC NULLS LAST, * DESC, * DESC, Var0 NULLS LAST, Var0 DESC NULLS LAST, \"Var0\" ASC NULLS LAST, \"Var0\" DESC NULLS LAST, * ASC NULLS FIRST, Var4 DESC NULLS FIRST, *, \"Var0\" ASC NULLS LAST, \"Var1\" NULLS LAST\n LIMIT -5\n OFFSET -22;"
+
+test9 = (,) <$> exprsSelectP <*> fromSelectP
+
+test10 =
+  SelectCommand
+    { exprsSelect = [(Distinct, ColumnName (AggFun Count Distinct (Var (VarName "Var0")))), (All, ColumnAlias (Var AllVar) (QuotedName "Var3")), (Distinct, ColumnName (Op2 (Fun Lower (Var (VarName "Var0"))) Is (Op1 Not (Fun Upper (Var (QuotedName "Var0")))))), (Distinct, ColumnName (Op2 (Op1 Not (AggFun Sum All (Var AllVar))) Le (Fun Lower (Var AllVar)))), (All, ColumnName (AggFun Avg Distinct (Var (QuotedName "Var0"))))],
+      fromSelect = Table "Table0",
+      whSelect = Just (Op2 (Fun Lower (Val NullVal)) And (Op2 (Op1 Not (Op1 Neg (Val (IntVal 24)))) Or (AggFun Min Distinct (Var AllVar)))),
+      groupbySelect = [VarName "Var2", VarName "Var1"],
+      orderbySelect = [(VarName "Var2", Just ASC, Just NULLSFIRST), (AllVar, Just ASC, Just NULLSFIRST), (VarName "Var0", Just ASC, Nothing), (VarName "Var0", Just ASC, Just NULLSLAST), (AllVar, Just DESC, Nothing), (AllVar, Just DESC, Nothing), (VarName "Var0", Nothing, Just NULLSLAST), (VarName "Var0", Just DESC, Just NULLSLAST), (QuotedName "Var0", Just ASC, Just NULLSLAST), (QuotedName "Var0", Just DESC, Just NULLSLAST), (AllVar, Just ASC, Just NULLSFIRST), (VarName "Var4", Just DESC, Just NULLSFIRST), (AllVar, Nothing, Nothing), (QuotedName "Var0", Just ASC, Just NULLSLAST), (QuotedName "Var1", Nothing, Just NULLSLAST)],
+      limitSelect = Just (-5),
+      offsetSelect = Just (-22)
+    }
+
+-- >>> P.parse scP test8
+-- Right (SelectCommand {exprsSelect = [(Distinct,ColumnName (AggFun Count Distinct (Var (VarName "Var0")))),(All,ColumnAlias (Var AllVar) (QuotedName "Var3")),(Distinct,ColumnName (Op2 (Fun Lower (Var (VarName "Var0"))) Is (Op1 Not (Fun Upper (Var (QuotedName "Var0")))))),(Distinct,ColumnName (Op2 (Op1 Not (AggFun Sum All (Var AllVar))) Le (Fun Lower (Var AllVar)))),(All,ColumnName (AggFun Avg Distinct (Var (QuotedName "Var0"))))], fromSelect = Table "Table0", whSelect = Just (Op2 (Fun Lower (Val NullVal)) And (Op2 (Op1 Not (Op1 Neg (Val (IntVal 24)))) Or (AggFun Min Distinct (Var AllVar)))), groupbySelect = [VarName "Var2",VarName "Var1"], orderbySelect = [(VarName "Var2",Just ASC,Just NULLSFIRST),(AllVar,Just ASC,Just NULLSFIRST),(VarName "Var0",Just ASC,Nothing),(VarName "Var0",Just ASC,Just NULLSLAST),(AllVar,Just DESC,Nothing),(AllVar,Just DESC,Nothing),(VarName "Var0",Nothing,Just NULLSLAST),(VarName "Var0",Just DESC,Just NULLSLAST),(QuotedName "Var0",Just ASC,Just NULLSLAST),(QuotedName "Var0",Just DESC,Just NULLSLAST),(AllVar,Just ASC,Just NULLSFIRST),(VarName "Var4",Just DESC,Just NULLSFIRST),(AllVar,Nothing,Nothing),(QuotedName "Var0",Just ASC,Just NULLSLAST),(QuotedName "Var1",Nothing,Just NULLSLAST)], limitSelect = Just (-5), offsetSelect = Just (-22)})
+
+test12 =
+  SelectCommand
+    { exprsSelect = [(Distinct, ColumnName (AggFun Count Distinct (Var (VarName "Var0")))), (All, ColumnAlias (Var AllVar) (QuotedName "Var3")), (Distinct, ColumnName (Op2 (Fun Lower (Var (VarName "Var0"))) Is (Op1 Not (Fun Upper (Var (QuotedName "Var0")))))), (Distinct, ColumnName (Op2 (Op1 Not (AggFun Sum All (Var AllVar))) Le (Fun Lower (Var AllVar)))), (All, ColumnName (AggFun Avg Distinct (Var (QuotedName "Var0"))))],
+      fromSelect = Table "Table0",
+      whSelect = Just (Op2 (Op2 (Fun Lower (Val NullVal)) And (Op1 Not (Op1 Neg (Val (IntVal 24))))) Or (AggFun Min Distinct (Var AllVar))),
+      groupbySelect = [VarName "Var2", VarName "Var1"],
+      orderbySelect = [(VarName "Var2", Just ASC, Just NULLSFIRST), (AllVar, Just ASC, Just NULLSFIRST), (VarName "Var0", Just ASC, Nothing), (VarName "Var0", Just ASC, Just NULLSLAST), (AllVar, Just DESC, Nothing), (AllVar, Just DESC, Nothing), (VarName "Var0", Nothing, Just NULLSLAST), (VarName "Var0", Just DESC, Just NULLSLAST), (QuotedName "Var0", Just ASC, Just NULLSLAST), (QuotedName "Var0", Just DESC, Just NULLSLAST), (AllVar, Just ASC, Just NULLSFIRST), (VarName "Var4", Just DESC, Just NULLSFIRST), (AllVar, Nothing, Nothing), (QuotedName "Var0", Just ASC, Just NULLSLAST), (QuotedName "Var1", Nothing, Just NULLSLAST)],
+      limitSelect = Just (-5),
+      offsetSelect = Just (-22)
+    }
+
+test11 = "SELECT DISTINCT (LENGTH('1k') - \"Var1\" AS Var0), SUM(Var0) AS \"Var0\", DISTINCT SUM(DISTINCT \"Var4\")\n"
+
+-- >>> P.parse exprsSelectP test11
+-- Left "No parses"
+
+-- >>> P.parse expP
 
 ccP :: Parser CreateCommand
 ccP = undefined
