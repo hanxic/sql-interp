@@ -145,7 +145,7 @@ isBaseFromExpression (TableRef _) = True
 isBaseFromExpression _ = False
 
 instance PP FromExpression where
-  pp (Table texp) = pp texp
+  pp (TableRef texp) = pp texp
   {- pp (TableAlias texp var) = pp texp <+> pp var -}
   pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc
   pp (Join fexp1 js fexp2) =

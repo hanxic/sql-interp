@@ -4,6 +4,7 @@ module SQLSyntax where
 
 import Control.Monad (mapM_)
 import Data.Char qualified as Char
+import Data.List (concat)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map
@@ -268,7 +269,7 @@ reservedOrderTypeFL = ["NULLS", "FIRST", "LAST"]
 
 reservedKeyWords :: [String]
 reservedKeyWords =
-  List.concat
+  (concat :: [[String]] -> [String])
     [ reservedVerb,
       reservedCountStyle,
       reservedJoinStyle,

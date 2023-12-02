@@ -4,17 +4,17 @@ module Interpretation where
 
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
-import Data.Map.Ordered as OMap
+import Data.Map as Map
 import Data.Set as Set
 import SQLSyntax
 import TableSyntax
 import Test.QuickCheck
 
 emptyScope :: Scope
-emptyScope = OMap.empty
+emptyScope = Map.empty
 
-emptyTableMap :: TableMap
-emptyTableMap = OMap.empty
+emptyTableData :: TableData
+emptyTableData = []
 
 emptyIndexName :: IndexName
 emptyIndexName = NE.singleton ""
@@ -23,28 +23,27 @@ emptyTable :: Table
 emptyTable =
   Table
     { indexName = emptyIndexName,
-      orderName = emptyIndexName,
-      tableMap = emptyTableMap
+      tableData = emptyTableData
     }
 
 emptyRow :: Row
-emptyRow = OMap.empty
+emptyRow = Map.empty
 
 tableFMap :: (Row -> Row) -> Table -> Table
-tableFMap f t = t {tableMap = fmap f (tableMap t)}
+tableFMap f t = t {tableData = fmap f (tableData t)}
 
 tableMapEither :: (Row -> Either ErrorMsg Row) -> Table -> Either ErrorMsg Table
 tableMapEither f t = do
-  let lst_tm = assoc $ tableMap t
   tm <-
-    foldl
-      ( \t' r -> do
-          t'' <- t'
+    List.foldr
+      ( \r n -> do
+          n' <- n
           r' <- f r
-          Right t''
+          Right $ r' : n'
       )
-      (Right emptyTableMap)
-  return $ t {tableMap = tm}
+      (Right emptyTableData)
+      (tableData t)
+  Right $ t {tableData = tm}
 
 -- Evaluates Query
 evalQuery :: Query -> Scope -> Either ErrorMsg Table
@@ -82,10 +81,10 @@ evalListColumnExpr l r =
 evalColumnExpr :: ColumnExpression -> Row -> Either ErrorMsg Row
 evalColumnExpr (ColumnName e) r = do
   v <- evalExpression e r
-  Right $ OMap.singleton (show e, v)
+  Right $ Map.singleton (show e) v
 evalColumnExpr (ColumnAlias e n) r = do
   v <- evalExpression e r
-  Right $ OMap.singleton (show n, v)
+  Right $ Map.singleton (show n) v
 evalColumnExpr AllVar r = Right r
 
 -- Evaluates Where
@@ -105,9 +104,12 @@ evalGroupBy :: [Var] -> Table -> Either ErrorMsg GroupByMap
 evalGroupBy [] t = undefined
 evalGroupBy (v : vs) t = undefined
 
+boolGroupBy :: [Var] -> Row -> Bool
+boolGroupBy = undefined
+
 -- Evaluates From
 evalFrom :: FromExpression -> Scope -> Either ErrorMsg Table
-evalFrom (TableRef name) sc = case OMap.lookup name sc of
+evalFrom (TableRef name) sc = case Map.lookup name sc of
   Just t -> Right t
   Nothing -> Left $ "Table '" ++ name ++ "' does not exist in scope"
 evalFrom (SubQuery q) sc = evalSelect q sc
@@ -124,18 +126,12 @@ evalFrom (Join st (NamedJoin f1 f2 i1 i2)) sc = do
 evalJoin :: JoinStyle -> Table -> Table -> Either ErrorMsg Table
 evalJoin s t1 t2 = undefined
 
-evalJoinMap :: JoinStyle -> TableMap -> TableMap -> Either ErrorMsg TableMap
-evalJoinMap InnerJoin t1 t2 =
-  Right $
-    OMap.intersectionWith
-      ( \x y -> OMap.union (appendKey "_x" x) (appendKey "_y" y)
-      )
-      t1
-      t2
+evalJoinMap :: JoinStyle -> TableData -> TableData -> Either ErrorMsg TableData
+evalJoinMap InnerJoin t1 t2 = undefined
 evalJoinMap s _ _ = Left $ "unimplemented joinstyle '" ++ show s
 
 appendKey :: String -> Row -> Row
-appendKey s = OMap.foldlWithKey (\n k v -> n <> OMap.singleton (k ++ s, v)) emptyRow
+appendKey s = Map.foldlWithKey (\n k v -> n <> Map.singleton (k ++ s) v) emptyRow
 
 -- Sorts Table
 evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> Table -> Either ErrorMsg Table
@@ -143,8 +139,8 @@ evalSort _ _ = undefined
 
 -- Slices Table
 evalLimitOffset :: Maybe Int -> Maybe Int -> Table -> Table
-evalLimitOffset (Just l) (Just o) t = t {tableMap = OMap.take l $ OMap.drop o (tableMap t)}
-evalLimitOffset (Just l) Nothing t = t {tableMap = OMap.take l (tableMap t)}
+evalLimitOffset (Just l) (Just o) t = t {tableData = List.take l $ List.drop o (tableData t)}
+evalLimitOffset (Just l) Nothing t = t {tableData = List.take l (tableData t)}
 evalLimitOffset Nothing _ t = t
 
 -- Evaluates DeleteCommand
@@ -172,7 +168,7 @@ evalExpression (AggFun f _ exp) r = Left $ "Cannot call Aggregation Function '" 
 evalExpression (SQLSyntax.Fun f exp) r = Left $ "Cannot call Function '" ++ show f ++ "' on row"
 
 evalVar :: Var -> Row -> Either ErrorMsg DValue
-evalVar (VarName s) r = case OMap.lookup s r of
+evalVar (VarName s) r = case Map.lookup s r of
   Just v -> Right v
   Nothing -> Left $ "No column named '" ++ s ++ "'"
 evalVar (QuotedName s) r = undefined
