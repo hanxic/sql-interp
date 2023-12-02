@@ -62,23 +62,33 @@ instance PP OrderTypeAD where
 instance PP DValue where
   pp (IntVal i) = pp i
   pp (BoolVal b) = pp b
-  pp (StringVal s) = PP.text ("\"" <> s <> "\"")
+  pp (StringVal s) = PP.text ("\'" <> s <> "\'")
   pp NullVal = PP.text "NULL"
 
 instance PP DType where
   pp (StringType i) = PP.text $ "VARCHAR(" <> show i <> ")"
-  pp (IntType i) = PP.text "INTEGER"
-  pp BoolType = PP.text "BIT(1)"
+  pp (IntType i)
+    | i == 16 = PP.text "INTEGER"
+    | i == 32 = PP.text "BIGINT"
+  pp (IntType i) = PP.text "INT" <> PP.parens (pp i)
+  pp BoolType = PP.text "BOOLEAN"
 
 instance PP Function where
+  {-   pp (Avg cs e) = PP.text "AVG" <+> PP.parens (pp cs <+> pp e)
+    pp (Count cs e) = PP.text "COUNT" <+> PP.parens (pp cs <+> pp e)
+    pp (Max cs e) = PP.text "MAX" <+> PP.parens (pp cs <+> pp e)
+    pp (Min cs e) = PP.text "MIN" <+> PP.parens (pp cs <+> pp e)
+    pp (Sum cs e) = PP.text "SUM" <+> PP.parens (pp cs <+> pp e) -}
+  pp Len = PP.text "LENGTH"
+  pp Lower = PP.text "LOWER"
+  pp Upper = PP.text "UPPER"
+
+instance PP AggFunction where
   pp Avg = PP.text "AVG"
   pp Count = PP.text "COUNT"
   pp Max = PP.text "MAX"
   pp Min = PP.text "MIN"
   pp Sum = PP.text "SUM"
-  pp Len = PP.text "LENGTH"
-  pp Lower = PP.text "LOWER"
-  pp Upper = PP.text "UPPER"
 
 instance PP Uop where
   pp Not = PP.text "NOT"
@@ -116,7 +126,9 @@ instance PP Expression where
           ppPrec (level bop) e1 <+> pp bop <+> ppPrec (level bop + 1) e2
       ppPrec _ e' = pp e'
       ppParens b = if b then PP.parens else Prelude.id
-  pp (Fun f cs exp) =
+  pp (Fun f exp) =
+    pp f <> PP.parens (pp exp)
+  pp (AggFun f cs exp) =
     pp f <> PP.parens (pp cs <+> pp exp)
 
 instance PP JoinStyle where
@@ -125,14 +137,18 @@ instance PP JoinStyle where
   pp InnerJoin = PP.text "JOIN"
   pp OuterJoin = PP.text "OUTER JOIN"
 
+-- >>> pp LeftJoin
+-- LEFT JOIN
+
 isBaseFromExpression :: FromExpression -> Bool
 isBaseFromExpression (TableRef _) = True
 isBaseFromExpression _ = False
 
 instance PP FromExpression where
-  pp (TableRef texp) = pp texp
-  pp (SubQuery sc) = PP.parens $ pp sc
-  pp (Join js fexp1 fexp2) =
+  pp (Table texp) = pp texp
+  {- pp (TableAlias texp var) = pp texp <+> pp var -}
+  pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc
+  pp (Join fexp1 js fexp2) =
     let ppExp1 =
           if isBaseFromExpression fexp1
             then pp fexp1
@@ -141,7 +157,7 @@ instance PP FromExpression where
               if isBaseFromExpression fexp2
                 then pp fexp2
                 else PP.parens $ pp fexp2
-         in ppExp1 <+> PP.text "JOIN" <+> ppExp2
+         in ppExp1 <+> pp js <+> ppExp2
 
 instance PP CountStyle where
   pp Distinct = PP.text "DISTINCT"
@@ -164,33 +180,70 @@ ppFullQuery d = d <> PP.semi
 ppList :: Doc -> [Doc] -> Doc
 ppList p l = PP.hsep $ PP.punctuate p l
 
+ppSelectCommandAux :: SelectCommand -> Doc
+ppSelectCommandAux (SelectCommand exprs sf swh gb ob li o) =
+  ppList
+    ppNewLine
+    $ filter
+      (/= PP.empty)
+      [ PP.text "SELECT" <+> ppList PP.comma (map ppSE exprs),
+        PP.text "FROM" <+> pp sf,
+        if null swh
+          then PP.empty
+          else PP.text "WHERE" <+> pp swh,
+        if null gb
+          then PP.empty
+          else PP.text "GROUP BY" <+> ppList PP.comma (map pp gb),
+        if null ob
+          then PP.empty
+          else PP.text "ORDER BY" <+> ppList PP.comma (map ppOB ob),
+        if null li
+          then PP.empty
+          else PP.text "LIMIT" <+> pp li,
+        if null o
+          then PP.empty
+          else PP.text "OFFSET" <+> pp o
+      ]
+
+ppSE :: (CountStyle, ColumnExpression) -> Doc
+ppSE (cs, te@(ColumnName _)) =
+  pp cs <+> if isBaseTableExpression te then pp te else PP.parens $ pp te
+ppSE (cs, te@(ColumnAlias e v)) =
+  pp cs <+> if isBaseTableExpression te then pp te else PP.parens (pp e) <+> PP.text "AS" <+> pp v
+
+test_ppSE :: Test
+test_ppSE =
+  TestList
+    [ ppSE (Distinct, ColumnAlias (Op2 (Fun Len (Val (StringVal "1k"))) Minus (Var (QuotedName "Var1"))) (VarName "Var0")) ~?= PP.text "DISTINCT (LENGTH('1k') - \"Var1\") AS Var0"
+    ]
+
+ppOB :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> Doc
+ppOB (v, o1, o2) =
+  pp v <+> pp o1 <+> pp o2
+
 instance PP SelectCommand where
-  pp (SelectCommand exprs sf swh gb ob li o) =
-    ppFullQuery $
-      ppList
-        ppNewLine
-        [ PP.text "SELECT" <+> ppList PP.comma (map ppSE exprs),
-          PP.text "FROM" <+> pp sf,
-          PP.text "WHERE" <+> pp swh,
-          PP.text "GROUP BY" <+> ppList PP.comma (map pp gb),
-          PP.text "ORDER BY" <+> ppList PP.comma (map ppOB ob),
-          PP.text "LIMIT" <+> pp li,
-          PP.text "OFFSET" <+> pp o
-        ]
-    where
-      ppSE :: (CountStyle, ColumnExpression) -> Doc
-      ppSE (cs, te) =
-        pp cs <+> if isBaseTableExpression te then pp te else PP.parens $ pp te
-      ppOB :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> Doc
-      ppOB (v, o1, o2) =
-        pp v <+> pp o1 <+> pp o2
+  pp = ppFullQuery . ppSelectCommandAux
 
 instance PP CreateCommand where
-  pp (CreateCommand name ids) =
+  pp (CreateCommand ine name ids) =
     ppFullQuery $
       PP.text "CREATE TABLE"
+        <+> ( if ine
+                then PP.text "IF NOT EXISTS"
+                else PP.empty
+            )
         <+> pp name
-        <+> PP.parens (ppList PP.comma $ map (\(n, i) -> pp n <+> pp i) ids)
+        <+> PP.parens
+          ( ppList PP.comma $
+              map
+                ( \(n, t, nn, pk) ->
+                    pp n
+                      <+> pp t
+                      <+> (if nn then PP.text "NOT NULL" else PP.empty)
+                      <+> (if pk then PP.text "PRIMARY KEY" else PP.empty)
+                )
+                ids
+          )
 
 instance PP DeleteCommand where
   pp (DeleteCommand fr wh) =

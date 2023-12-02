@@ -178,7 +178,7 @@ data UpsertIntoCommand = UpsertIntoCommand
 -- **** Section for DeleteCommand ****
 
 data DeleteCommand = DeleteCommand
-  { fromDelete :: FromExpression,
+  { fromDelete :: TableName,
     whDelete :: Maybe Expression
   }
   deriving (Eq, Show)

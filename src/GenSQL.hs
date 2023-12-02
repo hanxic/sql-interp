@@ -1,33 +1,17 @@
 module GenSQL where
 
-import Control.Monad (liftM2, liftM3, mapM_)
+import Control.Monad (liftM2, liftM3, mapM_, replicateM)
 import Data.Char qualified as Char
 import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
-  ( Bop,
-    ColumnExpression (..),
-    CountStyle,
-    DType (..),
-    DValue (..),
-    Expression (..),
-    FromExpression (..),
-    Function (Avg, Count, Max, Min, Sum),
-    JoinStyle,
-    Name,
-    OrderTypeAD,
-    OrderTypeFL,
-    SelectCommand (SelectCommand),
-    TableName,
-    Uop,
-    Var (..),
-  )
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 
 -- | Generate a string literal, being careful about the characters that it may contain
-genStringLit :: Gen String
+
+{- genStringLit :: Gen String
 genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
   where
     -- escape special characters appearing in the string,
@@ -35,7 +19,22 @@ genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
     escape = foldr Char.showLitChar ""
     -- generate strings containing printable characters or spaces, but not including '\"'
     stringLitChars :: [Char]
-    stringLitChars = filter (\c -> c /= '\"' && (Char.isSpace c || Char.isPrint c)) ['\NUL' .. '~']
+    stringLitChars = filter (\c -> notElem c SQLSyntax.reservedChar && (Char.isSpace c || Char.isPrint c)) ['\NUL' .. '~'] -}
+
+genTest :: Gen String
+genTest = return "'"
+
+escape' = filter (`notElem` reservedChar)
+
+test1000 = escape' <$> genTest
+
+genStringLit :: Gen String
+genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
+  where
+    escape :: String -> String
+    escape = filter (`notElem` reservedChar)
+    stringLitChars :: [Char]
+    stringLitChars = filter (\c -> Char.isSpace c || Char.isPrint c) ['\NUL' .. '~']
 
 {- Arbitrary instances for nontrivial types -}
 instance Arbitrary DValue where
@@ -45,14 +44,6 @@ instance Arbitrary DValue where
         (1, BoolVal <$> arbitrary),
         (1, StringVal <$> genStringLit),
         (1, pure NullVal)
-      ]
-
-instance Arbitrary DType where
-  arbitrary =
-    QC.frequency
-      [ (1, StringType <$> arbitrary),
-        (1, IntType <$> arbitrary),
-        (1, pure BoolType)
       ]
 
 maxSize :: Int
@@ -67,6 +58,13 @@ genTablePool :: Gen [TableName]
 genTablePool = do
   i <- QC.chooseInt (1, maxSize)
   return ["Table" ++ show j | j <- [0, i]]
+
+genVarWOAllVar :: Gen Var
+genVarWOAllVar =
+  QC.frequency
+    [ (1, VarName <$> (QC.elements =<< genNamePool)),
+      (1, QuotedName <$> (QC.elements =<< genNamePool))
+    ]
 
 instance Arbitrary Var where
   arbitrary =
@@ -86,26 +84,33 @@ genValTC (IntType i) = do
   QC.frequency [(n, IntVal <$> QC.chooseInt (1, 2 ^ i)), (1, pure NullVal)]
 genValTC (StringType i) = do
   n <- genPos
-  QC.frequency [(n, StringVal <$> (arbitrary `QC.suchThat` (\s -> length s <= i))), (1, pure NullVal)]
+  QC.frequency [(n, StringVal <$> (genStringLit `QC.suchThat` (\s -> length s <= i))), (1, pure NullVal)]
 genValTC BoolType = do
   n <- genPos
   QC.frequency
     [(n, BoolVal <$> arbitrary), (1, pure NullVal)]
 
+inferAggFunctionType :: AggFunction -> Gen DType
+inferAggFunctionType f =
+  genIntType -- TODO: Add more types when more functions are added
+
 inferFunctionType :: Function -> Gen DType
 inferFunctionType f =
-  case f of
-    Avg -> genIntType
-    Count -> genIntType
-    Max -> genIntType
-    Min -> genIntType
-    Sum -> genIntType
-    _ -> genStringType
-  where
-    genIntType :: Gen DType
-    genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
-    genStringType :: Gen DType
-    genStringType = return $ StringType 255 --- Temporary value
+  genStringType -- TODO: Add more types when more functions are added
+
+genIntType :: Gen DType
+genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
+
+genStringType :: Gen DType
+genStringType = StringType <$> QC.chooseInt (1, 255) --- Temporary value
+
+instance Arbitrary DType where
+  arbitrary =
+    QC.frequency
+      [ (1, genStringType),
+        (1, genIntType),
+        (1, pure BoolType)
+      ]
 
 genExp :: Int -> Gen Expression
 genExp n
@@ -116,47 +121,140 @@ genExp n =
     [ (1, genExp 0),
       (n, Op1 <$> arbitrary <*> genExp n'),
       (n, Op2 <$> genExp n' <*> arbitrary <*> genExp n'),
-      (n, genFunExp)
+      (n, genFun),
+      (n, genAggFun)
     ]
   where
     n' = n `div` 2
-    genFunExp :: Gen Expression -- Make sure generate dvalue such that the function type check
-    genFunExp =
+    genFun :: Gen Expression
+    genFun =
       arbitrary
         >>= ( \f ->
                 Fun f
-                  <$> arbitrary
-                  <*> QC.frequency
-                    [(1, Var <$> arbitrary), (1, Val <$> (inferFunctionType f >>= genValTC))]
+                  <$> (inferFunctionType f >>= genExpTC)
             )
+    genAggFun :: Gen Expression
+    genAggFun =
+      arbitrary
+        >>= ( \f ->
+                AggFun f
+                  <$> arbitrary
+                  <*> (inferAggFunctionType f >>= genExpTC)
+            )
+    genExpTC :: DType -> Gen Expression
+    genExpTC t =
+      QC.frequency
+        [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
 
 instance Arbitrary Expression where
   arbitrary = QC.sized genExp
 
+-- Scratch paper for function instance
+{- let genExpTC =
+      (=<<)
+        ( \t ->
+            QC.frequency
+              [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
+        )
+ in QC.frequency
+      [ (1, Avg <$> arbitrary <*> genExpTC genIntType),
+        (1, Count <$> arbitrary <*> genExpTC genIntType),
+        (1, Max <$> arbitrary <*> genExpTC genIntType),
+        (1, Min <$> arbitrary <*> genExpTC genIntType),
+        (1, Sum <$> arbitrary <*> genExpTC genIntType),
+        (1, Len <$> genExpTC genStringType),
+        (1, Lower <$> genExpTC genStringType),
+        (1, Upper <$> genExpTC genStringType)
+      ] -}
+
+genFromExpression :: Int -> Gen FromExpression
+genFromExpression n | n <= 0 = Table <$> (QC.elements =<< genTablePool)
+genFromExpression n =
+  QC.frequency
+    [ (n, Table <$> (QC.elements =<< genTablePool)),
+      (1, SubQuery <$> arbitrary),
+      (n, Join <$> genFromExpression n' <*> arbitrary <*> genFromExpression n')
+    ]
+  where
+    n' = n `div` 2
+
 instance Arbitrary FromExpression where
   arbitrary =
-    QC.frequency
-      [ (20, TableRef <$> (QC.elements =<< genTablePool)),
-        (1, SubQuery <$> arbitrary),
-        (20, Join <$> arbitrary <*> arbitrary <*> arbitrary)
-      ]
+    QC.sized genFromExpression
 
 instance Arbitrary ColumnExpression where
   arbitrary =
     QC.frequency
-      [ (1, ColumnName <$> arbitrary),
-        (1, ColumnAlias <$> arbitrary <*> arbitrary) -- This will cause some problem if alias is something that is invalid
+      [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
+        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> genVarWOAllVar) -- This will cause some problem if alias is something that is invalid
       ]
+
+patchWVar :: Expression -> Gen Expression
+patchWVar e@(Var _) = return e
+patchWVar (Val _) = Var <$> arbitrary
+patchWVar (Op1 u e) = patchWVar e
+patchWVar (Op2 e1 u e2) =
+  arbitrary
+    >>= ( \b ->
+            if b
+              then Op2 <$> patchWVar e1 <*> return u <*> return e2
+              else Op2 e1 u <$> patchWVar e2
+        )
+patchWVar (AggFun af cs e) = AggFun af cs <$> patchWVar e
+patchWVar (Fun f e) = Fun f <$> patchWVar e
+
+constrainSize :: Int -> Gen a -> Gen [a]
+constrainSize n g | n <= 0 = (: []) <$> g
+constrainSize n g = do
+  x <- g
+  xs <- constrainSize n' g
+  return $ x : xs
+  where
+    n' = n `div` 2
+
+test5 = QC.sample (QC.sized (`constrainSize` (QC.arbitrary :: Gen ColumnExpression)))
+
+genSelectCommand :: Int -> Gen SelectCommand
+genSelectCommand n =
+  SelectCommand
+    <$> atLeastN 1 arbitrary
+    <*> genFromExpression n'
+    <*> arbitrary
+    <*> QC.sized (`constrainSize` arbitrary)
+    <*> QC.sized (`constrainSize` arbitrary)
+    <*> arbitrary
+    <*> arbitrary
+  where
+    n' = n `div` 2
 
 instance Arbitrary SelectCommand where
   arbitrary =
-    SelectCommand
+    QC.sized genSelectCommand
+
+atLeastN :: Int -> Gen a -> Gen [a]
+atLeastN i g = do
+  n <- QC.sized (\n -> QC.chooseInt (i, n))
+  constrainSize n g
+
+instance Arbitrary CreateCommand where
+  arbitrary =
+    CreateCommand
       <$> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
+      <*> (QC.elements =<< genTablePool)
+      <*> QC.sized
+        ( `constrainSize`
+            ( (,,,)
+                <$> (QC.elements =<< genNamePool)
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+            )
+        )
+
+instance Arbitrary DeleteCommand where
+  arbitrary =
+    DeleteCommand
+      <$> (QC.elements =<< genTablePool)
       <*> arbitrary
 
 {- Arbitrary bounded enum instances -}
@@ -167,6 +265,9 @@ instance Arbitrary OrderTypeAD where
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Function where
+  arbitrary = QC.arbitraryBoundedEnum
+
+instance Arbitrary AggFunction where
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Bop where
