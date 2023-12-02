@@ -25,6 +25,7 @@ common common-stanza
     , HUnit 
     , QuickCheck
     , containers
+    , ordered-containers
     , filepath
     , pretty
     , network

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 
 module TableSyntax where
 
@@ -7,6 +8,7 @@ import Data.Kind (Type)
 import Data.List.NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Map.Ordered qualified as OM
 import SQLSyntax
 
 type Scope = Map TableName Table
