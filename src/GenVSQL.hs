@@ -1,7 +1,7 @@
 module GenVSQL where
 
 import Control.Monad (liftM2, liftM3, mapM_, replicateM)
-import Data.Char qualified as Char
+import Control.Monad.State (MonadState (..), State, StateT, runState, runStateT)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
@@ -15,3 +15,13 @@ data GenState = GenState
     numTable :: Int,
     genStore :: Map Name Table
   }
+
+data GenV t = StateT GenState (Gen t)
+
+class ArbitraryV a where
+  arbitraryV :: GenV a
+
+{- Need to define a few operations -}
+
+instance ArbitraryV Int where
+  arbitraryV = undefined

@@ -16,6 +16,7 @@ type Scope = Map TableName Table
 data Table = Table
   { indexName :: IndexName,
     orderName :: IndexName,
+    tableAlias :: Map Name Name,
     tableMap :: TableMap
   }
 
