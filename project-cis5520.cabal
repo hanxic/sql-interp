@@ -42,6 +42,7 @@ library
   exposed-modules:
       Parser
       GenSQL
+      GenVSQL
       Interpretation
       TableSyntax
       TableParser
