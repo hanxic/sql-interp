@@ -1,7 +1,11 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+
 module SQLSyntax where
 
 import Control.Monad (mapM_)
 import Data.Char qualified as Char
+import Data.Kind (Type)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Sequence.Internal.Sorting (Queue (Q))
@@ -27,7 +31,7 @@ Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/Equiva
 
 data ColumnExpression
   = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2) / SELECT SUM(A) / SELECT SUM(2)
-  | ColumnAlias Expression Var -- e.g. SELECT A AS B
+  | ColumnAlias Expression (Var ActualVar) -- e.g. SELECT A AS B
   deriving (Eq, Show)
 
 data CountStyle
@@ -76,7 +80,7 @@ level And = 8
 level Or = 7
 
 data Expression
-  = Var Var -- e.g. A
+  = Var (Var ActualVar) -- e.g. A
   | Val DValue
   | Op1 Uop Expression -- e.g. NOT A
   | Op2 Expression Bop Expression -- e.g. A + 2
@@ -84,11 +88,38 @@ data Expression
   | Fun Function Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
+data Expression' :: VarFlag -> Type where
+  Var1 :: Var ActualVar -> Expression' ActualVar
+
+data VarFlag = ActualVar | AbstractVar
+  deriving (Eq, Show, Bounded, Enum)
+
+{-
 data Var
   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
   | QuotedName Name -- Quoted, can be anything
   | AllVar
-  deriving (Eq, Show)
+  deriving (Eq, Show) -}
+
+data Var :: VarFlag -> Type where
+  VarName :: String -> Var ActualVar
+  QuotedName :: String -> Var ActualVar
+  AllVar :: Var AbstractVar
+
+instance Eq (Var ActualVar) where
+  (VarName s1) == (VarName s2) = s1 == s2
+  (QuotedName s1) == (QuotedName s2) = s1 == s2
+  _ == _ = False
+
+instance Show (Var ActualVar) where
+  show (VarName s1) = s1
+  show (QuotedName s2) = s2
+
+instance Eq (Var AbstractVar) where
+  _ == _ = True
+
+instance Show (Var AbstractVar) where
+  show AllVar = "*"
 
 data Uop
   = Not
@@ -197,8 +228,8 @@ data SelectCommand = SelectCommand
   { exprsSelect :: [(CountStyle, ColumnExpression)],
     fromSelect :: FromExpression,
     whSelect :: Maybe Expression,
-    groupbySelect :: [Var],
-    orderbySelect :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)],
+    groupbySelect :: [Var ActualVar],
+    orderbySelect :: [(Var ActualVar, Maybe OrderTypeAD, Maybe OrderTypeFL)],
     limitSelect :: Maybe Int,
     offsetSelect :: Maybe Int
   }
