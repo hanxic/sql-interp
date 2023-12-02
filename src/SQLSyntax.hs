@@ -184,8 +184,9 @@ data DeleteCommand = DeleteCommand
 -- **** Section for CreateCommand ****
 
 data CreateCommand = CreateCommand
-  { nameCreate :: TableName,
-    idCreate :: [(Name, DType)]
+  { ifNotExists :: Bool,
+    nameCreate :: TableName,
+    idCreate :: [(Name, DType, Bool, Bool)]
     -- TODO: Haven't finished
   }
   deriving (Eq, Show)

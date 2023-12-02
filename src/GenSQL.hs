@@ -46,14 +46,6 @@ instance Arbitrary DValue where
         (1, pure NullVal)
       ]
 
-instance Arbitrary DType where
-  arbitrary =
-    QC.frequency
-      [ (1, StringType <$> arbitrary),
-        (1, IntType <$> arbitrary),
-        (1, pure BoolType)
-      ]
-
 maxSize :: Int
 maxSize = 5
 
@@ -110,7 +102,15 @@ genIntType :: Gen DType
 genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
 
 genStringType :: Gen DType
-genStringType = return $ StringType 255 --- Temporary value
+genStringType = StringType <$> QC.chooseInt (1, 255) --- Temporary value
+
+instance Arbitrary DType where
+  arbitrary =
+    QC.frequency
+      [ (1, genStringType),
+        (1, genIntType),
+        (1, pure BoolType)
+      ]
 
 genExp :: Int -> Gen Expression
 genExp n
@@ -167,13 +167,20 @@ instance Arbitrary Expression where
         (1, Upper <$> genExpTC genStringType)
       ] -}
 
+genFromExpression :: Int -> Gen FromExpression
+genFromExpression n | n <= 0 = Table <$> (QC.elements =<< genTablePool)
+genFromExpression n =
+  QC.frequency
+    [ (n, Table <$> (QC.elements =<< genTablePool)),
+      (1, SubQuery <$> arbitrary),
+      (n, Join <$> genFromExpression n' <*> arbitrary <*> genFromExpression n')
+    ]
+  where
+    n' = n `div` 2
+
 instance Arbitrary FromExpression where
   arbitrary =
-    QC.frequency
-      [ (20, Table <$> (QC.elements =<< genTablePool)),
-        (1, SubQuery <$> arbitrary),
-        (20, Join <$> arbitrary <*> arbitrary <*> arbitrary)
-      ]
+    QC.sized genFromExpression
 
 instance Arbitrary ColumnExpression where
   arbitrary =
@@ -207,21 +214,42 @@ constrainSize n g = do
 
 test5 = QC.sample (QC.sized (`constrainSize` (QC.arbitrary :: Gen ColumnExpression)))
 
+genSelectCommand :: Int -> Gen SelectCommand
+genSelectCommand n =
+  SelectCommand
+    <$> atLeastN 1 arbitrary
+    <*> genFromExpression n'
+    <*> arbitrary
+    <*> QC.sized (`constrainSize` arbitrary)
+    <*> QC.sized (`constrainSize` arbitrary)
+    <*> arbitrary
+    <*> arbitrary
+  where
+    n' = n `div` 2
+
 instance Arbitrary SelectCommand where
   arbitrary =
-    SelectCommand
-      <$> atLeastN 1 arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> QC.sized (`constrainSize` arbitrary)
-      <*> QC.sized (`constrainSize` arbitrary)
-      <*> arbitrary
-      <*> arbitrary
+    QC.sized genSelectCommand
 
 atLeastN :: Int -> Gen a -> Gen [a]
 atLeastN i g = do
   n <- QC.sized (\n -> QC.chooseInt (i, n))
   constrainSize n g
+
+instance Arbitrary CreateCommand where
+  arbitrary =
+    CreateCommand
+      <$> arbitrary
+      <*> (QC.elements =<< genTablePool)
+      <*> QC.sized
+        ( `constrainSize`
+            ( (,,,)
+                <$> (QC.elements =<< genNamePool)
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+            )
+        )
 
 {- arbitrary >>= (`replicateM` g) . QC.getPositive -}
 

@@ -67,8 +67,11 @@ instance PP DValue where
 
 instance PP DType where
   pp (StringType i) = PP.text $ "VARCHAR(" <> show i <> ")"
-  pp (IntType i) = PP.text "INTEGER"
-  pp BoolType = PP.text "BIT(1)"
+  pp (IntType i)
+    | i == 16 = PP.text "INTEGER"
+    | i == 32 = PP.text "BIGINT"
+  pp (IntType i) = PP.text "INT" <> PP.parens (pp i)
+  pp BoolType = PP.text "BOOLEAN"
 
 instance PP Function where
   {-   pp (Avg cs e) = PP.text "AVG" <+> PP.parens (pp cs <+> pp e)
@@ -144,7 +147,7 @@ isBaseFromExpression _ = False
 instance PP FromExpression where
   pp (Table texp) = pp texp
   {- pp (TableAlias texp var) = pp texp <+> pp var -}
-  pp (SubQuery sc) = PP.parens $ ppSelectCommandAux sc
+  pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc
   pp (Join fexp1 js fexp2) =
     let ppExp1 =
           if isBaseFromExpression fexp1
@@ -222,11 +225,25 @@ instance PP SelectCommand where
   pp = ppFullQuery . ppSelectCommandAux
 
 instance PP CreateCommand where
-  pp (CreateCommand name ids) =
+  pp (CreateCommand ine name ids) =
     ppFullQuery $
       PP.text "CREATE TABLE"
+        <+> ( if ine
+                then PP.text "IF NOT EXISTS"
+                else PP.empty
+            )
         <+> pp name
-        <+> PP.parens (ppList PP.comma $ map (\(n, i) -> pp n <+> pp i) ids)
+        <+> PP.parens
+          ( ppList PP.comma $
+              map
+                ( \(n, t, nn, pk) ->
+                    pp n
+                      <+> pp t
+                      <+> (if nn then PP.text "NOT NULL" else PP.empty)
+                      <+> (if pk then PP.text "PRIMARY KEY" else PP.empty)
+                )
+                ids
+          )
 
 instance PP DeleteCommand where
   pp (DeleteCommand fr wh) =
