@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE GADTs #-}
 
 module SQLSyntax where
 

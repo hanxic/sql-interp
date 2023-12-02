@@ -250,7 +250,7 @@ test_bopP =
 -- If variable is Name, can be any Name that start with alphabet and contain both alphabet and numbers and underscore
 -- If variable is AllVar, parse *
 -- If variable is QuotedName, can be a quote and then everything
-starP :: Parser Var
+starP :: Parser ColumnExpression
 starP = AllVar <$ wsP (P.string "*")
 
 nameP :: Parser String
@@ -265,12 +265,11 @@ nameP = P.filter isValidName (wsP $ some baseP)
 varP :: Parser Var
 varP =
   wsP
-    ( starP
-        <|> ( VarName
-                <$> P.filter
-                  (`notElem` reservedKeyWords)
-                  nameP
-            )
+    ( ( VarName
+          <$> P.filter
+            (`notElem` reservedKeyWords)
+            nameP
+      )
         <|> ( QuotedName
                 <$> P.filter
                   (`notElem` reservedKeyWords)
@@ -285,7 +284,7 @@ varP =
 test_varP :: Test
 test_varP =
   TestList
-    [ P.parse varP "*" ~?= Right AllVar,
+    [ P.parse varP "*" ~?= errorMsgUnitTest,
       P.parse varP "1st" ~?= errorMsgUnitTest,
       P.parse varP "st1" ~?= Right (VarName "st1"),
       P.parse varP "\"\"" ~?= errorMsgUnitTest,
@@ -362,7 +361,7 @@ aggFunP = uncurry <$> (AggFun <$> aggFunctionP) <*> aggFunPAux
 test_aggFunP :: Test
 test_aggFunP =
   TestList
-    [ P.parse aggFunP "AVG(*)" ~?= Right (AggFun Avg All (Var AllVar)),
+    [ P.parse aggFunP "AVG(*)" ~?= errorMsgUnitTest,
       P.parse aggFunP "SUM(1 + 2)" ~?= Right (AggFun Sum All (Op2 (Val $ IntVal 1) Plus (Val $ IntVal 2))),
       P.parse aggFunP "COUNT(DISTINCT 1)" ~?= Right (AggFun Count Distinct (Val $ IntVal 1)),
       P.parse aggFunP "COUNT(DISTINCT a)" ~?= Right (AggFun Count Distinct (Var $ VarName "a"))
@@ -399,7 +398,7 @@ catchAnyWordL :: String -> Parser [a] -> Parser [a]
 catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.anyWord)))
 
 columnExpressionP :: Parser ColumnExpression
-columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> P.filter (/= AllVar) varP) <|> ColumnName <$> expP
+columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> varP) <|> ColumnName <$> expP <|> starP
 
 exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
 exprsSelectP =
@@ -477,7 +476,7 @@ fromSelectPAux = joinP
     joinP = baseP `P.chainl1` joinPAux
     joinPAux = flip Join <$> joinStyleP
     baseP =
-      Table
+      TableRef
         <$> P.filter
           (`notElem` reservedKeyWords)
           nameP
@@ -493,9 +492,9 @@ fromSelectP = wsP (P.string "FROM") *> fromSelectPAux
 test_fromSelectP :: Test
 test_fromSelectP =
   TestList
-    [ P.parse fromSelectP "FROM A" ~?= Right (Table "A"),
-      P.parse fromSelectP "FROM A JOIN B" ~?= Right (Join (Table "A") InnerJoin (Table "B")),
-      P.parse fromSelectP "FROM A JOIN B LEFT JOIN C" ~?= Right (Join (Join (Table "A") InnerJoin (Table "B")) LeftJoin (Table "C"))
+    [ P.parse fromSelectP "FROM A" ~?= Right (TableRef "A"),
+      P.parse fromSelectP "FROM A JOIN B" ~?= Right (Join (TableRef "A") InnerJoin (TableRef "B")),
+      P.parse fromSelectP "FROM A JOIN B LEFT JOIN C" ~?= Right (Join (Join (TableRef "A") InnerJoin (TableRef "B")) LeftJoin (TableRef "C"))
     ]
 
 whSelectP :: Parser (Maybe Expression)

@@ -113,7 +113,6 @@ instance PP Bop where
 instance PP Var where
   pp (VarName name) = PP.text name
   pp (QuotedName name) = PP.text ("\"" <> name <> "\"")
-  pp AllVar = PP.char '*'
 
 instance PP Expression where
   pp (Var v) = pp v
@@ -166,10 +165,12 @@ instance PP CountStyle where
 instance PP ColumnExpression where
   pp (ColumnName exp) = pp exp
   pp (ColumnAlias exp v) = pp exp <+> PP.text "AS" <+> pp v
+  pp AllVar = PP.text "*"
 
 isBaseTableExpression :: ColumnExpression -> Bool
 isBaseTableExpression (ColumnName e) = isBase e
 isBaseTableExpression (ColumnAlias e _) = isBase e
+isBaseTableExpression _ = True
 
 ppNewLine :: Doc
 ppNewLine = PP.char '\n'
@@ -210,6 +211,8 @@ ppSE (cs, te@(ColumnName _)) =
   pp cs <+> if isBaseTableExpression te then pp te else PP.parens $ pp te
 ppSE (cs, te@(ColumnAlias e v)) =
   pp cs <+> if isBaseTableExpression te then pp te else PP.parens (pp e) <+> PP.text "AS" <+> pp v
+ppSE (cs, AllVar) =
+  pp cs <+> pp AllVar
 
 test_ppSE :: Test
 test_ppSE =

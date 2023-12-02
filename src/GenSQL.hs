@@ -70,8 +70,7 @@ instance Arbitrary Var where
   arbitrary =
     QC.frequency
       [ (1, VarName <$> (QC.elements =<< genNamePool)),
-        (1, QuotedName <$> (QC.elements =<< genNamePool)),
-        (1, pure AllVar)
+        (1, QuotedName <$> (QC.elements =<< genNamePool))
       ]
 
 genPos :: Gen Int
@@ -168,10 +167,10 @@ instance Arbitrary Expression where
       ] -}
 
 genFromExpression :: Int -> Gen FromExpression
-genFromExpression n | n <= 0 = Table <$> (QC.elements =<< genTablePool)
+genFromExpression n | n <= 0 = TableRef <$> (QC.elements =<< genTablePool)
 genFromExpression n =
   QC.frequency
-    [ (n, Table <$> (QC.elements =<< genTablePool)),
+    [ (n, TableRef <$> (QC.elements =<< genTablePool)),
       (1, SubQuery <$> arbitrary),
       (n, Join <$> genFromExpression n' <*> arbitrary <*> genFromExpression n')
     ]
@@ -186,7 +185,8 @@ instance Arbitrary ColumnExpression where
   arbitrary =
     QC.frequency
       [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
-        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> genVarWOAllVar) -- This will cause some problem if alias is something that is invalid
+        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> genVarWOAllVar), -- This will cause some problem if alias is something that is invalid
+        (1, return AllVar)
       ]
 
 patchWVar :: Expression -> Gen Expression
