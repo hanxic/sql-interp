@@ -597,7 +597,7 @@ test_ccPrefixP =
     ]
 
 dTypeP :: Parser DType
-dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOL"])) <|> pStringType
+dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOLEAN"])) <|> pIntType <|> pStringType
   where
     pIntType :: Parser DType
     pIntType = wsP (P.string "INT" *> (IntType <$> parens P.int))
@@ -610,6 +610,10 @@ dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOL"]
         "BIGINT" -> IntType 32
         _ -> BoolType
 
+test16 = "INT(26)"
+
+-- >>>
+
 {- data DType
   = StringType Int
   | IntType Int
@@ -617,24 +621,39 @@ dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOL"]
   deriving (Eq, Show)-}
 
 idCreateP :: Parser (Name, DType, Bool, Bool)
-idCreateP = (,,,) <$> nameP <*> dTypeP <*> (True <$ pWords ["NOT", "NULL"] <|> pure False) <*> (True <$ pWords ["PRIMARY", "KEY"] <|> pure False)
+idCreateP =
+  (,,,)
+    <$> nameP
+    <*> dTypeP
+    <*> (True <$ pWords ["NOT", "NULL"] <|> pure False)
+    <*> (True <$ pWords ["PRIMARY", "KEY"] <|> pure False)
+
+test_idCreateP :: Test
+test_idCreateP =
+  TestList
+    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True, True),
+      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True, True),
+      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False, True)
+    ]
 
 ccP :: Parser CreateCommand
 ccP = CreateCommand <$> ccPrefixP <*> nameP <*> parens (P.sepBy1 idCreateP P.comma)
 
-test7 = CreateCommand {ifNotExists = False, nameCreate = "Table2", idCreate = [("Var5", BoolType, True, False)]}
+test7 = CreateCommand {ifNotExists = False, nameCreate = "Table0", idCreate = [("Var4", IntType 26, False, True), ("Var5", IntType 1, False, False), ("Var0", IntType 21, True, True)]}
 
 -- >>> SPP.pretty test7
--- "CREATE TABLE Table2 (Var5 BOOLEAN NOT NULL);"
+-- "CREATE TABLE Table0 (Var4 INT(26) PRIMARY KEY, Var5 INT(1), Var0 INT(21) NOT NULL PRIMARY KEY);"
 
-test8 = "CREATE TABLE Table2 (Var5 BOOLEAN NOT NULL);"
+test8 = "CREATE TABLE Table0 (Var4 INT(26) PRIMARY KEY, Var5 INT(1), Var0 INT(21) NOT NULL PRIMARY KEY);"
 
 -- >>> P.parse ccP test8
--- Left "No parses"
+-- Right (CreateCommand {ifNotExists = False, nameCreate = "Table0", idCreate = [("Var4",IntType 26,False,True),("Var5",IntType 1,False,False),("Var0",IntType 21,True,True)]})
 
-test9 = "(Var5 BOOLEAN NOT NULL)"
+test9 = "Var4 INT(26)"
 
-test10 = parens (P.sepBy1 idCreateP P.comma <|> pure []) -- Bug I don't know why!!!
+test13 = "(Var0 BOOLEAN, Var1 BOOLEAN NOT NULL PRIMARY KEY, Var1 VARCHAR(159) NOT NULL)"
+
+test10 = idCreateP
 
 -- >>> P.parse test10 test9
 -- Left "No parses"
