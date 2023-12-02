@@ -251,7 +251,11 @@ instance Arbitrary CreateCommand where
             )
         )
 
-{- arbitrary >>= (`replicateM` g) . QC.getPositive -}
+instance Arbitrary DeleteCommand where
+  arbitrary =
+    DeleteCommand
+      <$> (QC.elements =<< genTablePool)
+      <*> arbitrary
 
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where

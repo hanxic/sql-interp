@@ -579,7 +579,15 @@ test_offsetSelectP =
     ]
 
 scP :: Parser SelectCommand
-scP = SelectCommand <$> exprsSelectP <*> fromSelectP <*> whSelectP <*> groupbySelectP <*> orderbySelectP <*> limitSelectP <*> offsetSelectP
+scP =
+  SelectCommand
+    <$> exprsSelectP
+    <*> fromSelectP
+    <*> whSelectP
+    <*> groupbySelectP
+    <*> orderbySelectP
+    <*> limitSelectP
+    <*> offsetSelectP
 
 ccPrefixP :: Parser Bool
 ccPrefixP =
@@ -659,4 +667,6 @@ test10 = idCreateP
 -- Left "No parses"
 
 dcP :: Parser DeleteCommand
-dcP = undefined
+dcP = dcPrefixP *> (DeleteCommand <$> nameP <*> whSelectP)
+  where
+    dcPrefixP = pWords ["DELETE", "FROM"]
