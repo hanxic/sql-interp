@@ -111,7 +111,7 @@ evalFrom (TableRef name) sc = case Map.lookup name sc of
   Just t -> Right t
   Nothing -> Left $ "Table '" ++ name ++ "' does not exist in scope"
 evalFrom (SubQuery q) sc = evalSelect q sc
-evalFrom (Join st f1 f2) sc = do
+evalFrom (Join f1 st f2) sc = do
   t1 <- evalFrom f1 sc
   t2 <- evalFrom f2 sc
   return $ evalJoin st t1 t2
@@ -151,7 +151,8 @@ evalExpression (Op2 e1 o e2) r = do
   v1 <- evalExpression e1 r
   v2 <- evalExpression e2 r
   evalBop v1 o v2
-evalExpression (SQLSyntax.Fun f _ exp) r = undefined
+evalExpression (AggFun f _ exp) r = undefined
+evalExpression (SQLSyntax.Fun f exp) r = undefined
 
 evalVar :: Var -> Row -> Either ErrorMsg DValue
 evalVar (VarName s) r = case Map.lookup s r of
@@ -182,22 +183,28 @@ evalBop (StringVal s1) Like (StringVal s2) = Right $ BoolVal (s1 == s2)
 evalBop (StringVal s1) Is (StringVal s2) = Right $ BoolVal (s1 == s2)
 evalBop _ o _ = Left $ "Incorrect DType for operation '" ++ show o ++ "'"
 
+evalAggFunction :: AggFunction -> GroupBy a -> Either ErrorMsg DValue
+evalAggFunction Avg g = Right $ IntVal $ avgGroupBy g
+evalAggFunction Count g = Right $ IntVal $ lengthGroupBy g
+evalAggFunction Max g = Right $ maxGroupBy g
+evalAggFunction Min g = Right $ minGroupBy g
+evalAggFunction Sum g = Right $ IntVal $ sumGroupBy g
+
 evalFunction :: SQLSyntax.Function -> GroupBy a -> Either ErrorMsg DValue
-evalFunction Avg g = Right NullVal
-evalFunction Count g = Right NullVal
-evalFunction Max g = Right $ maxGroupBy g
-evalFunction Min g = Right NullVal
-evalFunction Sum g = Right NullVal
-evalFunction Len g = Right NullVal
+evalFunction Len g = Right $ IntVal $ lengthGroupBy g
 evalFunction Lower g = Right NullVal
 evalFunction Upper g = Right NullVal
 
-avgGroupBy :: GroupBy a -> DValue
-avgGroupBy g = IntVal $ sumGroupBy g `div` lengthGroupBy g
+avgGroupBy :: GroupBy a -> Int
+avgGroupBy g = sumGroupBy g `div` lengthGroupBy g
 
 maxGroupBy :: GroupBy a -> DValue
 maxGroupBy (SingleGroupBy v) = v
 maxGroupBy (MultiGroupBy v vs) = max v (maxGroupBy vs)
+
+minGroupBy :: GroupBy a -> DValue
+minGroupBy (SingleGroupBy v) = v
+minGroupBy (MultiGroupBy v vs) = min v (minGroupBy vs)
 
 sumGroupBy :: GroupBy a -> Int
 sumGroupBy (SingleGroupBy (IntVal v)) = v
