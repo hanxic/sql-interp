@@ -23,5 +23,5 @@ pretty = PP.render . pp
 instance PP Row where
   pp = undefined
 
-instance PP Table where
+instance PP TableMap where
   pp = undefined

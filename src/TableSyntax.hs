@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
 module TableSyntax where
@@ -8,18 +9,30 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
 
-type Id = String
+type Scope = Map TableName Table
 
-type Table = Map Id Row
+data Table = Table
+  { indexName :: IndexName,
+    orderName :: IndexName,
+    tableMap :: TableMap
+  }
 
-{- Id needs to be nonempty variable names (either quoted names or other names)-}
+type TableMap = Map Index Row
 
-{- data PrimaryKeys :: Flag -> Var -> Type where
-  Nil :: PrimaryKeys Empty a
-  Cons :: a -> PrimaryKey f a -> List NonEmpty a
- -}
-type Column = String
+type Row = Map Name DValue
 
-type Row = Map Var DValue
+type ErrorMsg = String
 
-type Store = Map TableName Table
+data IndexName where
+  SingleName :: Name -> IndexName
+  MultiName :: Name -> IndexName -> IndexName
+  deriving (Show, Eq, Ord)
+
+data Index where
+  SingleIndex :: DValue -> Index
+  MultiIndex :: DValue -> Index -> Index
+  deriving (Show, Eq, Ord)
+
+data GroupBy a where
+  SingleGroupBy :: DValue -> GroupBy DValue
+  MultiGroupBy :: DValue -> GroupBy a -> GroupBy a

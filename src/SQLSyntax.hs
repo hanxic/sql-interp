@@ -30,6 +30,7 @@ Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/Equiva
 data ColumnExpression
   = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2) / SELECT SUM(A) / SELECT SUM(2)
   | ColumnAlias Expression Var -- e.g. SELECT A AS B
+  | AllVar
   deriving (Eq, Show)
 
 data CountStyle
@@ -40,7 +41,7 @@ data CountStyle
 type TableName = String
 
 data FromExpression
-  = Table TableName -- e.g. FROM TEST
+  = TableRef TableName -- e.g. FROM TEST
   | -- | TableAlias TableName Var -- e.g. FROM A AS B
     SubQuery SelectCommand -- e.g. FROM (SELECT ...)
   | Join FromExpression JoinStyle FromExpression -- e.g. FROM A JOIN B
@@ -89,7 +90,6 @@ data Expression
 data Var
   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
   | QuotedName Name -- Quoted, can be anything
-  | AllVar
   deriving (Eq, Show)
 
 data Uop
@@ -289,7 +289,6 @@ GROUP BY
 HAVING
 JOIN
 -}
-
 {-
 Must have a select, and must have a from
 The rest are optional...Applicative

@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 -- | A small, applicative-based parsing library
 -- NOTE: this library does not export the `P` data constructor.
 -- All `Parser`s must be built using the following functions
