@@ -29,3 +29,5 @@ data GroupBy a where
   MultiGroupBy :: DValue -> GroupBy a -> GroupBy a
 
 type GroupByMap = Map Var (GroupBy DValue)
+
+type GroupByVars = NE.NonEmpty Name

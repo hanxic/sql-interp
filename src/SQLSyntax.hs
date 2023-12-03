@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
 
 module SQLSyntax where
 
@@ -97,10 +97,12 @@ data Expression
   | Fun Function Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
-data Var
-  = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
-  | QuotedName Name -- Quoted, can be anything
-  deriving (Eq, Show)
+type Var = Name
+
+-- data Var
+--   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
+--   | QuotedName Name -- Quoted, can be anything
+--   deriving (Eq, Show)
 
 data Uop
   = Not
@@ -172,7 +174,7 @@ data VerbAlter
 -- **** Section for AlterTableCommand ****
 
 data AlterTableCommand = AlterTableCommand
-  { fromAlterT :: TableName,
+  { fromAlterT :: FromExpression,
     verbAlterT :: VerbAlter,
     columnAlterT :: ColumnExpression
   }
@@ -180,7 +182,7 @@ data AlterTableCommand = AlterTableCommand
 -- **** Section for UpsertIntoCommand ****
 
 data UpsertIntoCommand = UpsertIntoCommand
-  { fromUpsertI :: TableName,
+  { fromUpsertI :: FromExpression,
     columnNames :: Maybe [Name],
     valuesUpsertI :: [DValue]
   }

@@ -10,6 +10,7 @@ import SQLSyntax
 import TableSyntax
 import Test.QuickCheck
 
+-- Empty data types
 emptyScope :: Scope
 emptyScope = Map.empty
 
@@ -29,6 +30,7 @@ emptyTable =
 emptyRow :: Row
 emptyRow = Map.empty
 
+-- Helper functions
 tableFMap :: (Row -> Row) -> Table -> Table
 tableFMap f t = t {tableData = fmap f (tableData t)}
 
@@ -45,12 +47,22 @@ tableMapEither f t = do
       (tableData t)
   Right $ t {tableData = tm}
 
+tableLength :: Table -> Int
+tableLength = length . tableData
+
 -- Evaluates Query
 evalQuery :: Query -> Scope -> Either ErrorMsg Table
 evalQuery (SelectQuery q) = evalSelect q
 evalQuery (DeleteQuery q) = evalDelete q
 
--- Evaluates SelectCommand
+-- Parses SelectCommand
+-- @Gary THIS IS THE MAIN WORK HORSE
+-- 1. Find the table referenced in FROM
+-- 2. Filter out the rows we don't care about
+-- 3. Calculate new columns, 1 per Expression
+-- 4. Sort the table based on SORT BY
+-- 5. Slice the top N rows based on Limit/Offset
+-- X. TODO GroupBy, I am thinking of branching
 evalSelect :: SelectCommand -> Scope -> Either ErrorMsg Table
 evalSelect q sc = do
   tableFrom <- evalFrom (fromSelect q) sc
@@ -60,13 +72,17 @@ evalSelect q sc = do
   let tableLimited = evalLimitOffset (limitSelect q) (offsetSelect q) tableSorted
   Right tableLimited
 
--- Evaluates Select Expressions
+-- Evaluates Column Expressions
 evalSelectExpr :: [(CountStyle, ColumnExpression)] -> Table -> Either ErrorMsg Table
 evalSelectExpr l = tableMapEither (evalListColumnExpr $ convertSelectExpr l)
 
+-- TODO handle the DISTINCT keyword
 convertSelectExpr :: [(CountStyle, ColumnExpression)] -> [ColumnExpression]
-convertSelectExpr = undefined
+convertSelectExpr = List.map snd
 
+-- Fold through each Exprssion which is (Row -> Row)
+-- Apply to Row and collect the result
+-- Any error stop the process
 evalListColumnExpr :: [ColumnExpression] -> Row -> Either ErrorMsg Row
 evalListColumnExpr l r =
   List.foldl
@@ -78,6 +94,7 @@ evalListColumnExpr l r =
     (Right emptyRow)
     l
 
+-- Evaluate the expression and rename the column (key) in map
 evalColumnExpr :: ColumnExpression -> Row -> Either ErrorMsg Row
 evalColumnExpr (ColumnName e) r = do
   v <- evalExpression e r
@@ -87,7 +104,7 @@ evalColumnExpr (ColumnAlias e n) r = do
   Right $ Map.singleton (show n) v
 evalColumnExpr AllVar r = Right r
 
--- Evaluates Where
+-- Evaluates Where Clasues (filters the rows)
 evalWhere :: Maybe Expression -> Table -> Either ErrorMsg Table
 evalWhere (Just e) t = tableMapEither (evalWhereBool e) t
 evalWhere Nothing t = Right t
@@ -99,13 +116,26 @@ evalWhereBool e r = case evalExpression e r of
   Left s -> Left s
   _ -> Left "Where clause is not a boolean expression"
 
--- Evaluates GroupBy
-evalGroupBy :: [Var] -> Table -> Either ErrorMsg GroupByMap
-evalGroupBy [] t = undefined
-evalGroupBy (v : vs) t = undefined
+-- TODO Evaluates GroupBy
+evalGroupBy :: [Var] -> Table -> Either ErrorMsg [[Row]]
+evalGroupBy vs t =
+  let tm = tableData t
+   in if checkGroupVars vs tm
+        then Right $ groupBy (boolGroupBy vs) tm
+        else Left $ "Column name(s) '" ++ show vs ++ "' missing"
 
-boolGroupBy :: [Var] -> Row -> Bool
-boolGroupBy = undefined
+-- Check that all Vars are in the table
+checkGroupVars :: [Var] -> TableData -> Bool
+checkGroupVars vs [] = False
+checkGroupVars vs (r : _) = all (`Map.member` r) vs
+
+-- Equality for two rows based on values within key subset
+boolGroupBy :: [Var] -> Row -> Row -> Bool
+boolGroupBy [] r1 r2 = True
+boolGroupBy (k : ks) r1 r2 = do
+  let v1 = (!) r1 k
+  let v2 = (!) r2 k
+  v1 == v2 && boolGroupBy ks r1 r2
 
 -- Evaluates From
 evalFrom :: FromExpression -> Scope -> Either ErrorMsg Table
@@ -153,9 +183,9 @@ evalWhereDelete :: Maybe Expression -> Table -> Either ErrorMsg Table
 evalWhereDelete (Just e) t = evalWhere (Just $ Op1 Not e) t
 evalWhereDelete Nothing _ = Right emptyTable
 
--- Evaluates nested operations
+-- Evaluates nested expressions
 evalExpression :: Expression -> Row -> Either ErrorMsg DValue
-evalExpression (Var v) r = evalVar v r
+evalExpression (Var s) r = evalVar s r
 evalExpression (Val v) _ = Right v
 evalExpression (Op1 o e) r = do
   v1 <- evalExpression e r
@@ -168,10 +198,9 @@ evalExpression (AggFun f _ exp) r = Left $ "Cannot call Aggregation Function '" 
 evalExpression (SQLSyntax.Fun f exp) r = Left $ "Cannot call Function '" ++ show f ++ "' on row"
 
 evalVar :: Var -> Row -> Either ErrorMsg DValue
-evalVar (VarName s) r = case Map.lookup s r of
-  Just v -> Right v
+evalVar s r = case Map.lookup s r of
+  Just d -> Right d
   Nothing -> Left $ "No column named '" ++ s ++ "'"
-evalVar (QuotedName s) r = undefined
 
 evalUop :: Uop -> DValue -> Either ErrorMsg DValue
 evalUop Neg (IntVal i) = Right $ IntVal (-1 * i)
@@ -208,6 +237,7 @@ evalFunction Len g = Right $ IntVal $ lengthGroupBy g
 evalFunction Lower g = Right NullVal
 evalFunction Upper g = Right NullVal
 
+-- Execution of aggregation functions
 avgGroupBy :: GroupBy a -> Int
 avgGroupBy g = sumGroupBy g `div` lengthGroupBy g
 
