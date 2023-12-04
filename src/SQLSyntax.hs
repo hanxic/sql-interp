@@ -7,8 +7,7 @@ import AList
 import Control.Monad (mapM_)
 import Data.Char qualified as Char
 import Data.List (concat)
-import Data.List qualified as List
-import Data.List.NonEmpty qualified as NE
+import Data.List qualified as Listå
 import Data.Map
 import Data.Sequence.Internal.Sorting (Queue (Q))
 import Test.HUnit

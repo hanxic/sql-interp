@@ -171,21 +171,22 @@ genFromExpression n | n <= 0 = TableRef <$> (QC.elements =<< genTablePool)
 genFromExpression n =
   QC.frequency
     [ (n, TableRef <$> (QC.elements =<< genTablePool)),
-      (1, SubQuery <$> arbitrary),
       (n, Join <$> genFromExpression n' <*> arbitrary <*> genFromExpression n' <*> QC.sized (`constrainSize` arbitrary))
     ]
   where
     n' = n `div` 2
 
+{-       (1, SubQuery <$> arbitrary),-}
 instance Arbitrary FromExpression where
-  arbitrary =
-    QC.sized genFromExpression
+  arbitrary = do
+    n <- QC.sized (\x -> QC.chooseInt (1, x))
+    QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)]
 
 instance Arbitrary ColumnExpression where
   arbitrary =
     QC.frequency
       [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
-        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> arbitrary), -- This will cause some problem if alias is something that is invalid
+        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> (QC.elements =<< genTablePool)), -- This will cause some problem if alias is something that is invalid
         (1, return AllVar)
       ]
 
@@ -234,6 +235,15 @@ genSelectCommand n =
   where
     n' = n `div` 2
 
+test232 = atLeastN 1 (arbitrary :: Gen (CountStyle, ColumnExpression))
+
+-- >>> QC.sample test232
+
+test17 = show [1, 2, 3]
+
+-- >>> test17
+-- "[1,2,3]"
+
 instance Arbitrary SelectCommand where
   arbitrary =
     QC.sized genSelectCommand
@@ -241,7 +251,7 @@ instance Arbitrary SelectCommand where
 atLeastN :: Int -> Gen a -> Gen [a]
 atLeastN i g = do
   n <- QC.sized (\n -> QC.chooseInt (i, n))
-  constrainSize n g
+  constrainSize1 n g
 
 instance Arbitrary CreateCommand where
   arbitrary =

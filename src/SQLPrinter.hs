@@ -290,3 +290,8 @@ instance PP AlterTableCommand where
     PP.text "ALTER TABLE" <+> pp fr <+> pp ve <+> pp co --- TODO: This is buggy
 
 -- TODO: Add nested to make sure not over 80 words
+
+test101 = ColumnAlias (Var (Dot "Table1" "Var4")) "(1j"
+
+-- >>> pretty test101
+-- "Table1.Var4 AS (1j"

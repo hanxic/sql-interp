@@ -382,7 +382,7 @@ test_exprsSelectP =
       P.parse exprsSelectP "SELECT A AS Something" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something")],
       P.parse exprsSelectP "SELECT DISTINCT A AS Something" ~?= Right [(Distinct, ColumnAlias (Var $ VarName "A") "Something")],
       P.parse exprsSelectP "SELECT A A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something else"), (All, ColumnAlias (Var $ VarName "B") "C")],
+      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something"), (All, ColumnAlias (Var $ VarName "B") "C")],
       P.parse exprsSelectP "SELECT" ~?= errorMsgUnitTest
     ]
 
@@ -486,6 +486,7 @@ fakeFromExpressionP = joinP
     joinPAux = flip FakeJoin <$> joinStyleP
     baseP =
       FakeOn <$> parens fakeFromExpressionP <*> joinNamesP
+        <|> parens fakeFromExpressionP
         <|> FakeOn <$> (FakeAlias <$> nameP <*> (wsP (P.string "AS") *> nameP)) <*> joinNamesP
         <|> FakeAlias <$> nameP <*> (wsP (P.string "AS") *> nameP)
         <|> FakeOn <$> (Fake <$> pFVarName) <*> joinNamesP
@@ -553,7 +554,7 @@ opAtLevel l = flip Op2 <$> P.filter (\x -> level x == l) bopP-}
 {- fromSelectP :: Parser FromExpression
 fromSelectP = wsP (P.string "FROM") *> fromSelectPAux -}
 fromSelectP :: Parser FromExpression
-fromSelectP = wsP (P.string "FROM") *> (fakeFE2FE <$> fakeFromExpressionP)
+fromSelectP = wsP (P.string "FROM") *> (fakeFE2FE <$> fakeFromExpressionP <|> SubQuery <$> parens scP)
 
 test_fromSelectP :: Test
 test_fromSelectP =
@@ -655,6 +656,46 @@ scP =
     <*> limitSelectP
     <*> offsetSelectP
 
+test7 =
+  SelectCommand
+    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
+      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" "Var2"), (Dot "Table0" "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" "Var3")]) [(Dot "Table0" "Var2", Dot "Table0" "Var2"), (VarName "Var0", VarName "Var3"), (VarName "Var0", VarName "Var0")],
+      whSelect = Nothing,
+      groupbySelect = [Dot "Table2" "Var0", Dot "Table1" "Var3", VarName "Var2"],
+      orderbySelect = [(Dot "Table0" "Var0", Nothing, Nothing), (Dot "Table5" "Var0", Just DESC, Just NULLSFIRST), (VarName "Var4", Nothing, Just NULLSFIRST)],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+-- >>> SPP.pretty test7
+-- "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT LENGTH(Var3) AS Table2\n FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n GROUP BY Table2.Var0, Table1.Var3, Var2\n ORDER BY Table0.Var0, Table5.Var0 DESC NULLS FIRST, Var4 NULLS FIRST;"
+
+test8 :: String
+test8 = "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT LENGTH(Var3) AS Table2\n FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n GROUP BY Table2.Var0, Table1.Var3, Var2\n ORDER BY Table0.Var0, Table5.Var0 DESC NULLS FIRST, Var4 NULLS FIRST;"
+
+-- >>> P.parse scP test8
+-- Right (SelectCommand {exprsSelect = [(All,AllVar),(Distinct,ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"),(Distinct,AllVar),(Distinct,ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")], fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0",Dot "Table2" "Var2"),(Dot "Table0" "Var2",VarName "Var3"),(VarName "Var3",Dot "Table4" "Var3")]) [], whSelect = Nothing, groupbySelect = [], orderbySelect = [], limitSelect = Nothing, offsetSelect = Nothing})
+
+test14 =
+  SelectCommand
+    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
+      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" "Var2"), (Dot "Table0" "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" "Var3")]) [],
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+test11 = "FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n "
+
+test16 = "FROM (Table5 LEFT JOIN Table4) OUTER JOIN Table0 ON Table0.Var0=Var0,Var2=Var0,Var0=Table1.Var0\n "
+
+test12 = fromSelectP
+
+-- >>> P.doParse test12 test11
+-- Just (Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0",Dot "Table2" "Var2"),(Dot "Table0" "Var2",VarName "Var3"),(VarName "Var3",Dot "Table4" "Var3")]) [],"ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n ")
+
 ccPrefixP :: Parser Bool
 ccPrefixP =
   wsP (P.string "CREATE")
@@ -684,8 +725,6 @@ dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOLEA
         "BIGINT" -> IntType 32
         _ -> BoolType
 
-test16 = "INT(26)"
-
 -- >>>
 
 {- data DType
@@ -713,16 +752,6 @@ test_idCreateP =
 ccP :: Parser CreateCommand
 ccP = CreateCommand <$> ccPrefixP <*> nameP <*> parens (P.sepBy1 idCreateP P.comma)
 
-test7 = CreateCommand {ifNotExists = False, nameCreate = "Table0", idCreate = [("Var4", IntType 26, False, True), ("Var5", IntType 1, False, False), ("Var0", IntType 21, True, True)]}
-
--- >>> SPP.pretty test7
--- "CREATE TABLE Table0 (Var4 INT(26) PRIMARY KEY, Var5 INT(1), Var0 INT(21) NOT NULL PRIMARY KEY);"
-
-test8 = "CREATE TABLE Table0 (Var4 INT(26) PRIMARY KEY, Var5 INT(1), Var0 INT(21) NOT NULL PRIMARY KEY);"
-
--- >>> P.parse ccP test8
--- Right (CreateCommand {ifNotExists = False, nameCreate = "Table0", idCreate = [("Var4",IntType 26,False,True),("Var5",IntType 1,False,False),("Var0",IntType 21,True,True)]})
-
 test9 = "Var4 INT(26)"
 
 test13 = "(Var0 BOOLEAN, Var1 BOOLEAN NOT NULL PRIMARY KEY, Var1 VARCHAR(159) NOT NULL)"
@@ -736,3 +765,44 @@ dcP :: Parser DeleteCommand
 dcP = dcPrefixP *> (DeleteCommand <$> nameP <*> whSelectP)
   where
     dcPrefixP = pWords ["DELETE", "FROM"]
+
+test_all :: IO Counts
+test_all =
+  runTestTT $
+    TestList
+      [ test_wsP,
+        test_stringP,
+        test_constP,
+        test_stringValP,
+        test_functionP,
+        test_aggFunctionP,
+        test_uopP,
+        test_bopP,
+        test_varP,
+        test_aggFunP,
+        test_countStyleP,
+        test_exprsSelectP,
+        test_joinNamesPAux,
+        test_joinNamesP,
+        test_fakeFromExpressionP,
+        test_fromSelectP,
+        test_groupbySelectP,
+        test_orderbySelectP,
+        test_limitSelectP,
+        test_offsetSelectP,
+        test_ccPrefixP,
+        test_idCreateP
+      ]
+
+qc :: IO ()
+qc = do
+  putStrLn "roundtrip_val"
+  QC.quickCheck prop_roundtrip_val
+  putStrLn "roundtrip_exp"
+  QC.quickCheck prop_roundtrip_exp
+  putStrLn "roundtrip_select"
+  QC.quickCheck prop_roundtrip_select
+  putStrLn "roundtrip_create"
+  QC.quickCheck prop_roundtrip_create
+  putStrLn "roundtrip_delete"
+  QC.quickCheck prop_roundtrip_delete
