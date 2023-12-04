@@ -3,7 +3,6 @@
 
 module SQLSyntax where
 
-import AList
 import Control.Monad (mapM_)
 import Data.Char qualified as Char
 import Data.List (concat)

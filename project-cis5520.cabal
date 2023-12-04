@@ -54,7 +54,6 @@ library
       SQLParser
       SQLPrinter
       SQLSyntax
-      AList
   hs-source-dirs:
       src
 
