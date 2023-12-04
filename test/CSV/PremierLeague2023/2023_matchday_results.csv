@@ -1,0 +1,381 @@
+,fixture.id,fixture.date,teams.home.id,teams.home.name,teams.home.winner,teams.away.id,teams.away.name,teams.away.winner,goals.home,goals.away
+0,867946,2022-08-05T19:00:00+00:00,52,Crystal Palace,False,42,Arsenal,True,0,2
+1,867947,2022-08-06T11:30:00+00:00,36,Fulham,,40,Liverpool,,2,2
+2,867948,2022-08-06T14:00:00+00:00,35,Bournemouth,True,66,Aston Villa,False,2,0
+3,867949,2022-08-06T14:00:00+00:00,63,Leeds,True,39,Wolves,False,2,1
+4,867950,2022-08-07T13:00:00+00:00,46,Leicester,,55,Brentford,,2,2
+5,867951,2022-08-06T14:00:00+00:00,34,Newcastle,True,65,Nottingham Forest,False,2,0
+6,867952,2022-08-06T14:00:00+00:00,47,Tottenham,True,41,Southampton,False,4,1
+7,867953,2022-08-06T16:30:00+00:00,45,Everton,False,49,Chelsea,True,0,1
+8,867954,2022-08-07T13:00:00+00:00,33,Manchester United,False,51,Brighton,True,1,2
+9,867955,2022-08-07T15:30:00+00:00,48,West Ham,False,50,Manchester City,True,0,2
+10,867956,2022-08-13T14:00:00+00:00,42,Arsenal,True,46,Leicester,False,4,2
+11,867957,2022-08-13T11:30:00+00:00,66,Aston Villa,True,45,Everton,False,2,1
+12,867958,2022-08-13T16:30:00+00:00,55,Brentford,True,33,Manchester United,False,4,0
+13,867959,2022-08-13T14:00:00+00:00,51,Brighton,,34,Newcastle,,0,0
+14,867960,2022-08-14T15:30:00+00:00,49,Chelsea,,47,Tottenham,,2,2
+15,867961,2022-08-15T19:00:00+00:00,40,Liverpool,,52,Crystal Palace,,1,1
+16,867962,2022-08-13T14:00:00+00:00,50,Manchester City,True,35,Bournemouth,False,4,0
+17,867963,2022-08-14T13:00:00+00:00,65,Nottingham Forest,True,48,West Ham,False,1,0
+18,867964,2022-08-13T14:00:00+00:00,41,Southampton,,63,Leeds,,2,2
+19,867965,2022-08-13T14:00:00+00:00,39,Wolves,,36,Fulham,,0,0
+20,867966,2022-08-20T16:30:00+00:00,35,Bournemouth,False,42,Arsenal,True,0,3
+21,867967,2022-08-20T14:00:00+00:00,52,Crystal Palace,True,66,Aston Villa,False,3,1
+22,867968,2022-08-20T14:00:00+00:00,45,Everton,,65,Nottingham Forest,,1,1
+23,867969,2022-08-20T14:00:00+00:00,36,Fulham,True,55,Brentford,False,3,2
+24,867970,2022-08-21T13:00:00+00:00,63,Leeds,True,49,Chelsea,False,3,0
+25,867971,2022-08-20T14:00:00+00:00,46,Leicester,False,41,Southampton,True,1,2
+26,867972,2022-08-22T19:00:00+00:00,33,Manchester United,True,40,Liverpool,False,2,1
+27,867973,2022-08-21T15:30:00+00:00,34,Newcastle,,50,Manchester City,,3,3
+28,867974,2022-08-20T11:30:00+00:00,47,Tottenham,True,39,Wolves,False,1,0
+29,867975,2022-08-21T13:00:00+00:00,48,West Ham,False,51,Brighton,True,0,2
+30,867976,2022-08-27T16:30:00+00:00,42,Arsenal,True,36,Fulham,False,2,1
+31,867977,2022-08-28T13:00:00+00:00,66,Aston Villa,False,48,West Ham,True,0,1
+32,867978,2022-08-27T14:00:00+00:00,55,Brentford,,45,Everton,,1,1
+33,867979,2022-08-27T14:00:00+00:00,51,Brighton,True,63,Leeds,False,1,0
+34,867980,2022-08-27T14:00:00+00:00,49,Chelsea,True,46,Leicester,False,2,1
+35,867981,2022-08-27T14:00:00+00:00,40,Liverpool,True,35,Bournemouth,False,9,0
+36,867982,2022-08-27T14:00:00+00:00,50,Manchester City,True,52,Crystal Palace,False,4,2
+37,867983,2022-08-28T15:30:00+00:00,65,Nottingham Forest,False,47,Tottenham,True,0,2
+38,867984,2022-08-27T11:30:00+00:00,41,Southampton,False,33,Manchester United,True,0,1
+39,867985,2022-08-28T13:00:00+00:00,39,Wolves,,34,Newcastle,,1,1
+40,867986,2022-08-31T18:30:00+00:00,35,Bournemouth,,39,Wolves,,0,0
+41,867987,2022-08-31T18:30:00+00:00,42,Arsenal,True,66,Aston Villa,False,2,1
+42,867988,2022-08-30T18:30:00+00:00,36,Fulham,True,51,Brighton,False,2,1
+43,867989,2022-08-30T19:00:00+00:00,63,Leeds,,45,Everton,,1,1
+44,867990,2022-09-01T19:00:00+00:00,46,Leicester,False,33,Manchester United,True,0,1
+45,867991,2022-08-31T18:45:00+00:00,48,West Ham,,47,Tottenham,,1,1
+46,867992,2022-08-30T18:30:00+00:00,52,Crystal Palace,,55,Brentford,,1,1
+47,867993,2022-08-30T18:45:00+00:00,41,Southampton,True,49,Chelsea,False,2,1
+48,867994,2022-08-31T19:00:00+00:00,40,Liverpool,True,34,Newcastle,False,2,1
+49,867995,2022-08-31T18:30:00+00:00,50,Manchester City,True,65,Nottingham Forest,False,6,0
+50,867996,2022-09-03T16:30:00+00:00,66,Aston Villa,,50,Manchester City,,1,1
+51,867997,2022-09-03T14:00:00+00:00,55,Brentford,True,63,Leeds,False,5,2
+52,867998,2022-09-04T13:00:00+00:00,51,Brighton,True,46,Leicester,False,5,2
+53,867999,2022-09-03T14:00:00+00:00,49,Chelsea,True,48,West Ham,False,2,1
+54,868000,2022-09-03T11:30:00+00:00,45,Everton,,40,Liverpool,,0,0
+55,868001,2022-09-04T15:30:00+00:00,33,Manchester United,True,42,Arsenal,False,3,1
+56,868002,2022-09-03T14:00:00+00:00,34,Newcastle,,52,Crystal Palace,,0,0
+57,868003,2022-09-03T14:00:00+00:00,65,Nottingham Forest,False,35,Bournemouth,True,2,3
+58,868004,2022-09-03T14:00:00+00:00,47,Tottenham,True,36,Fulham,False,2,1
+59,868005,2022-09-03T14:00:00+00:00,39,Wolves,True,41,Southampton,False,1,0
+60,868006,2023-04-04T18:45:00+00:00,35,Bournemouth,False,51,Brighton,True,0,2
+61,868007,2023-03-01T19:45:00+00:00,42,Arsenal,True,45,Everton,False,4,0
+62,868008,2023-01-18T20:00:00+00:00,52,Crystal Palace,,33,Manchester United,,1,1
+63,868009,2023-01-12T20:00:00+00:00,36,Fulham,True,49,Chelsea,False,2,1
+64,868010,2023-04-04T18:45:00+00:00,63,Leeds,True,65,Nottingham Forest,False,2,1
+65,868011,2023-04-04T18:45:00+00:00,46,Leicester,False,66,Aston Villa,True,1,2
+66,868012,2023-03-01T20:00:00+00:00,40,Liverpool,True,39,Wolves,False,2,0
+67,868013,2023-01-19T20:00:00+00:00,50,Manchester City,True,47,Tottenham,False,4,2
+68,868014,2023-03-15T19:30:00+00:00,41,Southampton,False,55,Brentford,True,0,2
+69,868015,2023-04-05T19:00:00+00:00,48,West Ham,False,34,Newcastle,True,1,5
+70,868016,2022-09-16T19:00:00+00:00,66,Aston Villa,True,41,Southampton,False,1,0
+71,868017,2022-09-18T11:00:00+00:00,55,Brentford,False,42,Arsenal,True,0,3
+72,868018,2023-03-15T19:30:00+00:00,51,Brighton,True,52,Crystal Palace,False,1,0
+73,868019,2023-04-04T19:00:00+00:00,49,Chelsea,,40,Liverpool,,0,0
+74,868020,2022-09-18T13:15:00+00:00,45,Everton,True,48,West Ham,False,1,0
+75,868021,2023-02-08T20:00:00+00:00,33,Manchester United,,63,Leeds,,2,2
+76,868022,2022-09-17T14:00:00+00:00,34,Newcastle,,35,Bournemouth,,1,1
+77,868023,2022-09-16T19:00:00+00:00,65,Nottingham Forest,False,36,Fulham,True,2,3
+78,868024,2022-09-17T16:30:00+00:00,47,Tottenham,True,46,Leicester,False,6,2
+79,868025,2022-09-17T11:30:00+00:00,39,Wolves,False,50,Manchester City,True,0,3
+80,868026,2022-10-01T14:00:00+00:00,35,Bournemouth,,55,Brentford,,0,0
+81,868027,2022-10-01T11:30:00+00:00,42,Arsenal,True,47,Tottenham,False,3,1
+82,868028,2022-10-01T14:00:00+00:00,52,Crystal Palace,False,49,Chelsea,True,1,2
+83,868029,2022-10-01T14:00:00+00:00,36,Fulham,False,34,Newcastle,True,1,4
+84,868030,2022-10-02T15:30:00+00:00,63,Leeds,,66,Aston Villa,,0,0
+85,868031,2022-10-03T19:00:00+00:00,46,Leicester,True,65,Nottingham Forest,False,4,0
+86,868032,2022-10-01T14:00:00+00:00,40,Liverpool,,51,Brighton,,3,3
+87,868033,2022-10-02T13:00:00+00:00,50,Manchester City,True,33,Manchester United,False,6,3
+88,868034,2022-10-01T14:00:00+00:00,41,Southampton,False,45,Everton,True,1,2
+89,868035,2022-10-01T16:30:00+00:00,48,West Ham,True,39,Wolves,False,2,0
+90,868036,2022-10-08T14:00:00+00:00,35,Bournemouth,True,46,Leicester,False,2,1
+91,868037,2022-10-09T15:30:00+00:00,42,Arsenal,True,40,Liverpool,False,3,2
+92,868038,2022-10-08T16:30:00+00:00,51,Brighton,False,47,Tottenham,True,0,1
+93,868039,2022-10-08T14:00:00+00:00,49,Chelsea,True,39,Wolves,False,3,0
+94,868040,2022-10-09T13:00:00+00:00,52,Crystal Palace,True,63,Leeds,False,2,1
+95,868041,2022-10-09T18:00:00+00:00,45,Everton,False,33,Manchester United,True,1,2
+96,868042,2022-10-08T14:00:00+00:00,50,Manchester City,True,41,Southampton,False,4,0
+97,868043,2022-10-08T14:00:00+00:00,34,Newcastle,True,55,Brentford,False,5,1
+98,868044,2022-10-10T19:00:00+00:00,65,Nottingham Forest,,66,Aston Villa,,1,1
+99,868045,2022-10-09T13:00:00+00:00,48,West Ham,True,36,Fulham,False,3,1
+100,868046,2022-10-16T13:00:00+00:00,66,Aston Villa,False,49,Chelsea,True,0,2
+101,868047,2022-10-14T19:00:00+00:00,55,Brentford,True,51,Brighton,False,2,0
+102,868048,2022-10-15T14:00:00+00:00,36,Fulham,,35,Bournemouth,,2,2
+103,868049,2022-10-16T13:00:00+00:00,63,Leeds,False,42,Arsenal,True,0,1
+104,868050,2022-10-15T11:30:00+00:00,46,Leicester,,52,Crystal Palace,,0,0
+105,868051,2022-10-16T15:30:00+00:00,40,Liverpool,True,50,Manchester City,False,1,0
+106,868052,2022-10-16T13:00:00+00:00,33,Manchester United,,34,Newcastle,,0,0
+107,868053,2022-10-16T13:00:00+00:00,41,Southampton,,48,West Ham,,1,1
+108,868054,2022-10-15T16:30:00+00:00,47,Tottenham,True,45,Everton,False,2,0
+109,868055,2022-10-15T14:00:00+00:00,39,Wolves,True,65,Nottingham Forest,False,1,0
+110,868056,2022-10-19T18:30:00+00:00,35,Bournemouth,False,41,Southampton,True,0,1
+111,868057,2023-02-15T19:30:00+00:00,42,Arsenal,False,50,Manchester City,True,1,3
+112,868058,2022-10-19T18:30:00+00:00,55,Brentford,,49,Chelsea,,0,0
+113,868059,2022-10-18T18:30:00+00:00,51,Brighton,,65,Nottingham Forest,,0,0
+114,868060,2022-10-20T18:30:00+00:00,36,Fulham,True,66,Aston Villa,False,3,0
+115,868061,2022-10-20T19:15:00+00:00,46,Leicester,True,63,Leeds,False,2,0
+116,868062,2022-10-18T19:15:00+00:00,52,Crystal Palace,True,39,Wolves,False,2,1
+117,868063,2022-10-19T18:30:00+00:00,34,Newcastle,True,45,Everton,False,1,0
+118,868064,2022-10-19T18:30:00+00:00,40,Liverpool,True,48,West Ham,False,1,0
+119,868065,2022-10-19T19:15:00+00:00,33,Manchester United,True,47,Tottenham,False,2,0
+120,868066,2022-10-23T13:00:00+00:00,66,Aston Villa,True,55,Brentford,False,4,0
+121,868067,2022-10-22T16:30:00+00:00,49,Chelsea,,33,Manchester United,,1,1
+122,868068,2022-10-22T14:00:00+00:00,45,Everton,True,52,Crystal Palace,False,3,0
+123,868069,2022-10-23T13:00:00+00:00,63,Leeds,False,36,Fulham,True,2,3
+124,868070,2022-10-22T14:00:00+00:00,50,Manchester City,True,51,Brighton,False,3,1
+125,868071,2022-10-22T11:30:00+00:00,65,Nottingham Forest,True,40,Liverpool,False,1,0
+126,868072,2022-10-23T13:00:00+00:00,41,Southampton,,42,Arsenal,,1,1
+127,868073,2022-10-23T15:30:00+00:00,47,Tottenham,False,34,Newcastle,True,1,2
+128,868074,2022-10-24T19:00:00+00:00,48,West Ham,True,35,Bournemouth,False,2,0
+129,868075,2022-10-23T13:00:00+00:00,39,Wolves,False,46,Leicester,True,0,4
+130,868076,2022-10-29T14:00:00+00:00,35,Bournemouth,False,47,Tottenham,True,2,3
+131,868077,2022-10-30T14:00:00+00:00,42,Arsenal,True,65,Nottingham Forest,False,5,0
+132,868078,2022-10-29T14:00:00+00:00,55,Brentford,,39,Wolves,,1,1
+133,868079,2022-10-29T14:00:00+00:00,51,Brighton,True,49,Chelsea,False,4,1
+134,868080,2022-10-29T14:00:00+00:00,52,Crystal Palace,True,41,Southampton,False,1,0
+135,868081,2022-10-29T16:30:00+00:00,36,Fulham,,45,Everton,,0,0
+136,868082,2022-10-29T11:30:00+00:00,46,Leicester,False,50,Manchester City,True,0,1
+137,868083,2022-10-29T18:45:00+00:00,40,Liverpool,False,63,Leeds,True,1,2
+138,868084,2022-10-30T16:15:00+00:00,33,Manchester United,True,48,West Ham,False,1,0
+139,868085,2022-10-29T14:00:00+00:00,34,Newcastle,True,66,Aston Villa,False,4,0
+140,868086,2022-11-06T14:00:00+00:00,66,Aston Villa,True,33,Manchester United,False,3,1
+141,868087,2022-11-06T12:00:00+00:00,49,Chelsea,False,42,Arsenal,True,0,1
+142,868088,2022-11-05T17:30:00+00:00,45,Everton,False,46,Leicester,True,0,2
+143,868089,2022-11-05T15:00:00+00:00,63,Leeds,True,35,Bournemouth,False,4,3
+144,868090,2022-11-05T15:00:00+00:00,50,Manchester City,True,36,Fulham,False,2,1
+145,868091,2022-11-05T15:00:00+00:00,65,Nottingham Forest,,55,Brentford,,2,2
+146,868092,2022-11-06T14:00:00+00:00,41,Southampton,False,34,Newcastle,True,1,4
+147,868093,2022-11-06T16:30:00+00:00,47,Tottenham,False,40,Liverpool,True,1,2
+148,868094,2022-11-06T14:00:00+00:00,48,West Ham,False,52,Crystal Palace,True,1,2
+149,868095,2022-11-05T15:00:00+00:00,39,Wolves,False,51,Brighton,True,2,3
+150,868096,2022-11-12T15:00:00+00:00,35,Bournemouth,True,45,Everton,False,3,0
+151,868097,2022-11-13T14:00:00+00:00,51,Brighton,False,66,Aston Villa,True,1,2
+152,868098,2022-11-13T16:30:00+00:00,36,Fulham,False,33,Manchester United,True,1,2
+153,868099,2022-11-12T15:00:00+00:00,40,Liverpool,True,41,Southampton,False,3,1
+154,868100,2022-11-12T12:30:00+00:00,50,Manchester City,False,55,Brentford,True,1,2
+155,868101,2022-11-12T17:30:00+00:00,34,Newcastle,True,49,Chelsea,False,1,0
+156,868102,2022-11-12T15:00:00+00:00,65,Nottingham Forest,True,52,Crystal Palace,False,1,0
+157,868103,2022-11-12T15:00:00+00:00,47,Tottenham,True,63,Leeds,False,4,3
+158,868104,2022-11-12T15:00:00+00:00,48,West Ham,False,46,Leicester,True,0,2
+159,868105,2022-11-12T19:45:00+00:00,39,Wolves,False,42,Arsenal,True,0,2
+160,868106,2022-12-26T20:00:00+00:00,42,Arsenal,True,48,West Ham,False,3,1
+161,868107,2022-12-26T17:30:00+00:00,66,Aston Villa,False,40,Liverpool,True,1,3
+162,868108,2022-12-26T12:30:00+00:00,55,Brentford,,47,Tottenham,,2,2
+163,868109,2022-12-27T17:30:00+00:00,49,Chelsea,True,35,Bournemouth,False,2,0
+164,868110,2022-12-26T15:00:00+00:00,52,Crystal Palace,False,36,Fulham,True,0,3
+165,868111,2022-12-26T15:00:00+00:00,45,Everton,False,39,Wolves,True,1,2
+166,868112,2022-12-28T20:00:00+00:00,63,Leeds,False,50,Manchester City,True,1,3
+167,868113,2022-12-26T15:00:00+00:00,46,Leicester,False,34,Newcastle,True,0,3
+168,868114,2022-12-27T20:00:00+00:00,33,Manchester United,True,65,Nottingham Forest,False,3,0
+169,868115,2022-12-26T15:00:00+00:00,41,Southampton,False,51,Brighton,True,1,3
+170,868116,2022-12-31T15:00:00+00:00,35,Bournemouth,False,52,Crystal Palace,True,0,2
+171,868117,2022-12-31T17:30:00+00:00,51,Brighton,False,42,Arsenal,True,2,4
+172,868118,2022-12-31T15:00:00+00:00,36,Fulham,True,41,Southampton,False,2,1
+173,868119,2022-12-30T20:00:00+00:00,40,Liverpool,True,46,Leicester,False,2,1
+174,868120,2022-12-31T15:00:00+00:00,50,Manchester City,,45,Everton,,1,1
+175,868121,2022-12-31T15:00:00+00:00,34,Newcastle,,63,Leeds,,0,0
+176,868122,2023-01-01T16:30:00+00:00,65,Nottingham Forest,,49,Chelsea,,1,1
+177,868123,2023-01-01T14:00:00+00:00,47,Tottenham,False,66,Aston Villa,True,0,2
+178,868124,2022-12-30T19:45:00+00:00,48,West Ham,False,55,Brentford,True,0,2
+179,868125,2022-12-31T12:30:00+00:00,39,Wolves,False,33,Manchester United,True,0,1
+180,868126,2023-01-03T19:45:00+00:00,42,Arsenal,,34,Newcastle,,0,0
+181,868127,2023-01-04T20:00:00+00:00,66,Aston Villa,,39,Wolves,,1,1
+182,868128,2023-01-02T17:30:00+00:00,55,Brentford,True,40,Liverpool,False,3,1
+183,868129,2023-01-05T20:00:00+00:00,49,Chelsea,False,50,Manchester City,True,0,1
+184,868130,2023-01-04T20:00:00+00:00,52,Crystal Palace,False,47,Tottenham,True,0,4
+185,868131,2023-01-03T19:45:00+00:00,45,Everton,False,51,Brighton,True,1,4
+186,868132,2023-01-04T19:45:00+00:00,63,Leeds,,48,West Ham,,2,2
+187,868133,2023-01-03T19:45:00+00:00,46,Leicester,False,36,Fulham,True,0,1
+188,868134,2023-01-03T20:00:00+00:00,33,Manchester United,True,35,Bournemouth,False,3,0
+189,868135,2023-01-04T19:30:00+00:00,41,Southampton,False,65,Nottingham Forest,True,0,1
+190,868136,2023-01-13T20:00:00+00:00,66,Aston Villa,True,63,Leeds,False,2,1
+191,868137,2023-01-14T17:30:00+00:00,55,Brentford,True,35,Bournemouth,False,2,0
+192,868138,2023-01-14T15:00:00+00:00,51,Brighton,True,40,Liverpool,False,3,0
+193,868139,2023-01-15T14:00:00+00:00,49,Chelsea,True,52,Crystal Palace,False,1,0
+194,868140,2023-01-14T15:00:00+00:00,45,Everton,False,41,Southampton,True,1,2
+195,868141,2023-01-14T12:30:00+00:00,33,Manchester United,True,50,Manchester City,False,2,1
+196,868142,2023-01-15T14:00:00+00:00,34,Newcastle,True,36,Fulham,False,1,0
+197,868143,2023-01-14T15:00:00+00:00,65,Nottingham Forest,True,46,Leicester,False,2,0
+198,868144,2023-01-15T16:30:00+00:00,47,Tottenham,False,42,Arsenal,True,0,2
+199,868145,2023-01-14T15:00:00+00:00,39,Wolves,True,48,West Ham,False,1,0
+200,868146,2023-01-21T15:00:00+00:00,35,Bournemouth,,65,Nottingham Forest,,1,1
+201,868147,2023-01-22T16:30:00+00:00,42,Arsenal,True,33,Manchester United,False,3,2
+202,868148,2023-01-21T17:30:00+00:00,52,Crystal Palace,,34,Newcastle,,0,0
+203,868149,2023-01-23T20:00:00+00:00,36,Fulham,False,47,Tottenham,True,0,1
+204,868150,2023-01-22T14:00:00+00:00,63,Leeds,,55,Brentford,,0,0
+205,868151,2023-01-21T15:00:00+00:00,46,Leicester,,51,Brighton,,2,2
+206,868152,2023-01-21T12:30:00+00:00,40,Liverpool,,49,Chelsea,,0,0
+207,868153,2023-01-22T14:00:00+00:00,50,Manchester City,True,39,Wolves,False,3,0
+208,868154,2023-01-21T15:00:00+00:00,41,Southampton,False,66,Aston Villa,True,0,1
+209,868155,2023-01-21T15:00:00+00:00,48,West Ham,True,45,Everton,False,2,0
+210,868156,2023-02-04T15:00:00+00:00,66,Aston Villa,False,46,Leicester,True,2,4
+211,868157,2023-02-04T15:00:00+00:00,55,Brentford,True,41,Southampton,False,3,0
+212,868158,2023-02-04T15:00:00+00:00,51,Brighton,True,35,Bournemouth,False,1,0
+213,868159,2023-02-03T20:00:00+00:00,49,Chelsea,,36,Fulham,,0,0
+214,868160,2023-02-04T12:30:00+00:00,45,Everton,True,42,Arsenal,False,1,0
+215,868161,2023-02-04T15:00:00+00:00,33,Manchester United,True,52,Crystal Palace,False,2,1
+216,868162,2023-02-04T17:30:00+00:00,34,Newcastle,,48,West Ham,,1,1
+217,868163,2023-02-05T14:00:00+00:00,65,Nottingham Forest,True,63,Leeds,False,1,0
+218,868164,2023-02-05T16:30:00+00:00,47,Tottenham,True,50,Manchester City,False,1,0
+219,868165,2023-02-04T15:00:00+00:00,39,Wolves,True,40,Liverpool,False,3,0
+220,868166,2023-02-11T17:30:00+00:00,35,Bournemouth,,34,Newcastle,,1,1
+221,868167,2023-02-11T15:00:00+00:00,42,Arsenal,,55,Brentford,,1,1
+222,868168,2023-02-11T15:00:00+00:00,52,Crystal Palace,,51,Brighton,,1,1
+223,868169,2023-02-11T15:00:00+00:00,36,Fulham,True,65,Nottingham Forest,False,2,0
+224,868170,2023-02-12T14:00:00+00:00,63,Leeds,False,33,Manchester United,True,0,2
+225,868171,2023-02-11T15:00:00+00:00,46,Leicester,True,47,Tottenham,False,4,1
+226,868172,2023-02-13T20:00:00+00:00,40,Liverpool,True,45,Everton,False,2,0
+227,868173,2023-02-12T16:30:00+00:00,50,Manchester City,True,66,Aston Villa,False,3,1
+228,868174,2023-02-11T15:00:00+00:00,41,Southampton,False,39,Wolves,True,1,2
+229,868175,2023-02-11T12:30:00+00:00,48,West Ham,,49,Chelsea,,1,1
+230,868176,2023-02-18T12:30:00+00:00,66,Aston Villa,False,42,Arsenal,True,2,4
+231,868177,2023-02-18T15:00:00+00:00,55,Brentford,,52,Crystal Palace,,1,1
+232,868178,2023-02-18T15:00:00+00:00,51,Brighton,False,36,Fulham,True,0,1
+233,868179,2023-02-18T15:00:00+00:00,49,Chelsea,False,41,Southampton,True,0,1
+234,868180,2023-02-18T15:00:00+00:00,45,Everton,True,63,Leeds,False,1,0
+235,868181,2023-02-19T14:00:00+00:00,33,Manchester United,True,46,Leicester,False,3,0
+236,868182,2023-02-18T17:30:00+00:00,34,Newcastle,False,40,Liverpool,True,0,2
+237,868183,2023-02-18T15:00:00+00:00,65,Nottingham Forest,,50,Manchester City,,1,1
+238,868184,2023-02-19T16:30:00+00:00,47,Tottenham,True,48,West Ham,False,2,0
+239,868185,2023-02-18T15:00:00+00:00,39,Wolves,False,35,Bournemouth,True,0,1
+240,868186,2023-02-25T17:30:00+00:00,35,Bournemouth,False,50,Manchester City,True,1,4
+241,868187,2023-02-25T19:45:00+00:00,52,Crystal Palace,,40,Liverpool,,0,0
+242,868188,2023-02-25T15:00:00+00:00,45,Everton,False,66,Aston Villa,True,0,2
+243,868189,2023-02-24T20:00:00+00:00,36,Fulham,,39,Wolves,,1,1
+244,868190,2023-02-25T15:00:00+00:00,63,Leeds,True,41,Southampton,False,1,0
+245,868191,2023-02-25T15:00:00+00:00,46,Leicester,False,42,Arsenal,True,0,1
+246,868192,2023-04-05T19:00:00+00:00,33,Manchester United,True,55,Brentford,False,1,0
+247,868193,2023-05-18T18:30:00+00:00,34,Newcastle,True,51,Brighton,False,4,1
+248,868194,2023-02-26T13:30:00+00:00,47,Tottenham,True,49,Chelsea,False,2,0
+249,868195,2023-02-25T15:00:00+00:00,48,West Ham,True,65,Nottingham Forest,False,4,0
+250,868196,2023-03-04T15:00:00+00:00,42,Arsenal,True,35,Bournemouth,False,3,2
+251,868197,2023-03-04T15:00:00+00:00,66,Aston Villa,True,52,Crystal Palace,False,1,0
+252,868198,2023-03-06T20:00:00+00:00,55,Brentford,True,36,Fulham,False,3,2
+253,868199,2023-03-04T15:00:00+00:00,51,Brighton,True,48,West Ham,False,4,0
+254,868200,2023-03-04T15:00:00+00:00,49,Chelsea,True,63,Leeds,False,1,0
+255,868201,2023-03-05T16:30:00+00:00,40,Liverpool,True,33,Manchester United,False,7,0
+256,868202,2023-03-04T12:30:00+00:00,50,Manchester City,True,34,Newcastle,False,2,0
+257,868203,2023-03-05T14:00:00+00:00,65,Nottingham Forest,,45,Everton,,2,2
+258,868204,2023-03-04T17:30:00+00:00,41,Southampton,True,46,Leicester,False,1,0
+259,868205,2023-03-04T15:00:00+00:00,39,Wolves,True,47,Tottenham,False,1,0
+260,868206,2023-03-11T12:30:00+00:00,35,Bournemouth,True,40,Liverpool,False,1,0
+261,868207,2023-03-11T17:30:00+00:00,52,Crystal Palace,False,50,Manchester City,True,0,1
+262,868208,2023-03-11T15:00:00+00:00,45,Everton,True,55,Brentford,False,1,0
+263,868209,2023-03-12T14:00:00+00:00,36,Fulham,False,42,Arsenal,True,0,3
+264,868210,2023-03-11T15:00:00+00:00,63,Leeds,,51,Brighton,,2,2
+265,868211,2023-03-11T15:00:00+00:00,46,Leicester,False,49,Chelsea,True,1,3
+266,868212,2023-03-12T14:00:00+00:00,33,Manchester United,,41,Southampton,,0,0
+267,868213,2023-03-12T16:30:00+00:00,34,Newcastle,True,39,Wolves,False,2,1
+268,868214,2023-03-11T15:00:00+00:00,47,Tottenham,True,65,Nottingham Forest,False,3,1
+269,868215,2023-03-12T14:00:00+00:00,48,West Ham,,66,Aston Villa,,1,1
+270,868216,2023-03-19T14:00:00+00:00,42,Arsenal,True,52,Crystal Palace,False,4,1
+271,868217,2023-03-18T15:00:00+00:00,66,Aston Villa,True,35,Bournemouth,False,3,0
+272,868218,2023-03-18T15:00:00+00:00,55,Brentford,,46,Leicester,,1,1
+273,868219,2023-05-04T19:00:00+00:00,51,Brighton,True,33,Manchester United,False,1,0
+274,868220,2023-03-18T17:30:00+00:00,49,Chelsea,,45,Everton,,2,2
+275,868221,2023-05-03T19:00:00+00:00,40,Liverpool,True,36,Fulham,False,1,0
+276,868222,2023-05-03T19:00:00+00:00,50,Manchester City,True,48,West Ham,False,3,0
+277,868223,2023-03-17T20:00:00+00:00,65,Nottingham Forest,False,34,Newcastle,True,1,2
+278,868224,2023-03-18T15:00:00+00:00,41,Southampton,,47,Tottenham,,3,3
+279,868225,2023-03-18T15:00:00+00:00,39,Wolves,False,63,Leeds,True,2,4
+280,868226,2023-04-01T14:00:00+00:00,35,Bournemouth,True,36,Fulham,False,2,1
+281,868227,2023-04-01T14:00:00+00:00,42,Arsenal,True,63,Leeds,False,4,1
+282,868228,2023-04-01T14:00:00+00:00,51,Brighton,,55,Brentford,,3,3
+283,868229,2023-04-01T16:30:00+00:00,49,Chelsea,False,66,Aston Villa,True,0,2
+284,868230,2023-04-01T14:00:00+00:00,52,Crystal Palace,True,46,Leicester,False,2,1
+285,868231,2023-04-03T19:00:00+00:00,45,Everton,,47,Tottenham,,1,1
+286,868232,2023-04-01T11:30:00+00:00,50,Manchester City,True,40,Liverpool,False,4,1
+287,868233,2023-04-02T15:30:00+00:00,34,Newcastle,True,33,Manchester United,False,2,0
+288,868234,2023-04-01T14:00:00+00:00,65,Nottingham Forest,,39,Wolves,,1,1
+289,868235,2023-04-02T13:00:00+00:00,48,West Ham,True,41,Southampton,False,1,0
+290,868236,2023-04-08T14:00:00+00:00,66,Aston Villa,True,65,Nottingham Forest,False,2,0
+291,868237,2023-04-08T14:00:00+00:00,55,Brentford,False,34,Newcastle,True,1,2
+292,868238,2023-04-08T14:00:00+00:00,36,Fulham,False,48,West Ham,True,0,1
+293,868239,2023-04-09T13:00:00+00:00,63,Leeds,False,52,Crystal Palace,True,1,5
+294,868240,2023-04-08T14:00:00+00:00,46,Leicester,False,35,Bournemouth,True,0,1
+295,868241,2023-04-09T15:30:00+00:00,40,Liverpool,,42,Arsenal,,2,2
+296,868242,2023-04-08T11:30:00+00:00,33,Manchester United,True,45,Everton,False,2,0
+297,868243,2023-04-08T16:30:00+00:00,41,Southampton,False,50,Manchester City,True,1,4
+298,868244,2023-04-08T14:00:00+00:00,47,Tottenham,True,51,Brighton,False,2,1
+299,868245,2023-04-08T14:00:00+00:00,39,Wolves,True,49,Chelsea,False,1,0
+300,868246,2023-04-15T11:30:00+00:00,66,Aston Villa,True,34,Newcastle,False,3,0
+301,868247,2023-04-15T14:00:00+00:00,49,Chelsea,False,51,Brighton,True,1,2
+302,868248,2023-04-15T14:00:00+00:00,45,Everton,False,36,Fulham,True,1,3
+303,868249,2023-04-17T19:00:00+00:00,63,Leeds,False,40,Liverpool,True,1,6
+304,868250,2023-04-15T16:30:00+00:00,50,Manchester City,True,46,Leicester,False,3,1
+305,868251,2023-04-16T15:30:00+00:00,65,Nottingham Forest,False,33,Manchester United,True,0,2
+306,868252,2023-04-15T14:00:00+00:00,41,Southampton,False,52,Crystal Palace,True,0,2
+307,868253,2023-04-15T14:15:00+00:00,47,Tottenham,False,35,Bournemouth,True,2,3
+308,868254,2023-04-16T13:00:00+00:00,48,West Ham,,42,Arsenal,,2,2
+309,868255,2023-04-15T14:00:00+00:00,39,Wolves,True,55,Brentford,False,2,0
+310,868256,2023-04-23T13:00:00+00:00,35,Bournemouth,False,48,West Ham,True,0,4
+311,868257,2023-04-21T19:00:00+00:00,42,Arsenal,,41,Southampton,,3,3
+312,868258,2023-04-22T14:00:00+00:00,55,Brentford,,66,Aston Villa,,1,1
+313,868259,2023-05-24T19:00:00+00:00,51,Brighton,,50,Manchester City,,1,1
+314,868260,2023-04-22T14:00:00+00:00,52,Crystal Palace,,45,Everton,,0,0
+315,868261,2023-04-22T11:30:00+00:00,36,Fulham,True,63,Leeds,False,2,1
+316,868262,2023-04-22T14:00:00+00:00,46,Leicester,True,39,Wolves,False,2,1
+317,868263,2023-04-22T14:00:00+00:00,40,Liverpool,True,65,Nottingham Forest,False,3,2
+318,868264,2023-05-25T19:00:00+00:00,33,Manchester United,True,49,Chelsea,False,4,1
+319,868265,2023-04-23T13:00:00+00:00,34,Newcastle,True,47,Tottenham,False,6,1
+320,868266,2023-04-27T18:45:00+00:00,45,Everton,False,34,Newcastle,True,1,4
+321,868267,2023-04-25T19:00:00+00:00,63,Leeds,,46,Leicester,,1,1
+322,868268,2023-04-26T18:30:00+00:00,65,Nottingham Forest,True,51,Brighton,False,3,1
+323,868269,2023-04-27T19:15:00+00:00,47,Tottenham,,33,Manchester United,,2,2
+324,868270,2023-04-26T18:45:00+00:00,48,West Ham,False,40,Liverpool,True,1,2
+325,868271,2023-04-25T18:30:00+00:00,39,Wolves,True,52,Crystal Palace,False,2,0
+326,868272,2023-04-25T18:45:00+00:00,66,Aston Villa,True,36,Fulham,False,1,0
+327,868273,2023-04-26T18:45:00+00:00,49,Chelsea,False,55,Brentford,True,0,2
+328,868274,2023-04-27T18:45:00+00:00,41,Southampton,False,35,Bournemouth,True,0,1
+329,868275,2023-04-26T19:00:00+00:00,50,Manchester City,True,42,Arsenal,False,4,1
+330,868276,2023-04-30T13:00:00+00:00,35,Bournemouth,True,63,Leeds,False,4,1
+331,868277,2023-05-02T19:00:00+00:00,42,Arsenal,True,49,Chelsea,False,3,1
+332,868278,2023-04-29T14:00:00+00:00,55,Brentford,True,65,Nottingham Forest,False,2,1
+333,868279,2023-04-29T14:00:00+00:00,51,Brighton,True,39,Wolves,False,6,0
+334,868280,2023-04-29T11:30:00+00:00,52,Crystal Palace,True,48,West Ham,False,4,3
+335,868281,2023-04-30T13:00:00+00:00,36,Fulham,False,50,Manchester City,True,1,2
+336,868282,2023-05-01T19:00:00+00:00,46,Leicester,,45,Everton,,2,2
+337,868283,2023-04-30T15:30:00+00:00,40,Liverpool,True,47,Tottenham,False,4,3
+338,868284,2023-04-30T13:00:00+00:00,33,Manchester United,True,66,Aston Villa,False,1,0
+339,868285,2023-04-30T13:00:00+00:00,34,Newcastle,True,41,Southampton,False,3,1
+340,868286,2023-05-06T14:00:00+00:00,35,Bournemouth,False,49,Chelsea,True,1,3
+341,868287,2023-05-08T16:30:00+00:00,51,Brighton,False,45,Everton,True,1,5
+342,868288,2023-05-08T14:00:00+00:00,36,Fulham,True,46,Leicester,False,5,3
+343,868289,2023-05-06T16:30:00+00:00,40,Liverpool,True,55,Brentford,False,1,0
+344,868290,2023-05-06T14:00:00+00:00,50,Manchester City,True,63,Leeds,False,2,1
+345,868291,2023-05-07T15:30:00+00:00,34,Newcastle,False,42,Arsenal,True,0,2
+346,868292,2023-05-08T19:00:00+00:00,65,Nottingham Forest,True,41,Southampton,False,4,3
+347,868293,2023-05-06T14:00:00+00:00,47,Tottenham,True,52,Crystal Palace,False,1,0
+348,868294,2023-05-07T18:00:00+00:00,48,West Ham,True,33,Manchester United,False,1,0
+349,868295,2023-05-06T14:00:00+00:00,39,Wolves,True,66,Aston Villa,False,1,0
+350,868296,2023-05-14T15:30:00+00:00,42,Arsenal,False,51,Brighton,True,0,3
+351,868297,2023-05-13T14:00:00+00:00,66,Aston Villa,True,47,Tottenham,False,2,1
+352,868298,2023-05-14T13:00:00+00:00,55,Brentford,True,48,West Ham,False,2,0
+353,868299,2023-05-13T14:00:00+00:00,49,Chelsea,,65,Nottingham Forest,,2,2
+354,868300,2023-05-13T14:00:00+00:00,52,Crystal Palace,True,35,Bournemouth,False,2,0
+355,868301,2023-05-14T13:00:00+00:00,45,Everton,False,50,Manchester City,True,0,3
+356,868302,2023-05-13T11:30:00+00:00,63,Leeds,,34,Newcastle,,2,2
+357,868303,2023-05-15T19:00:00+00:00,46,Leicester,False,40,Liverpool,True,0,3
+358,868304,2023-05-13T14:00:00+00:00,33,Manchester United,True,39,Wolves,False,2,0
+359,868305,2023-05-13T14:00:00+00:00,41,Southampton,False,36,Fulham,True,0,2
+360,868306,2023-05-20T14:00:00+00:00,35,Bournemouth,False,33,Manchester United,True,0,1
+361,868307,2023-05-21T13:00:00+00:00,51,Brighton,True,41,Southampton,False,3,1
+362,868308,2023-05-20T14:00:00+00:00,36,Fulham,,52,Crystal Palace,,2,2
+363,868309,2023-05-20T14:00:00+00:00,40,Liverpool,,66,Aston Villa,,1,1
+364,868310,2023-05-21T15:00:00+00:00,50,Manchester City,True,49,Chelsea,False,1,0
+365,868311,2023-05-22T19:00:00+00:00,34,Newcastle,,46,Leicester,,0,0
+366,868312,2023-05-20T16:30:00+00:00,65,Nottingham Forest,True,42,Arsenal,False,1,0
+367,868313,2023-05-20T11:30:00+00:00,47,Tottenham,False,55,Brentford,True,1,3
+368,868314,2023-05-21T12:30:00+00:00,48,West Ham,True,63,Leeds,False,3,1
+369,868315,2023-05-20T14:00:00+00:00,39,Wolves,,45,Everton,,1,1
+370,868316,2023-05-28T15:30:00+00:00,42,Arsenal,True,39,Wolves,False,5,0
+371,868317,2023-05-28T15:30:00+00:00,66,Aston Villa,True,51,Brighton,False,2,1
+372,868318,2023-05-28T15:30:00+00:00,55,Brentford,True,50,Manchester City,False,1,0
+373,868319,2023-05-28T15:30:00+00:00,49,Chelsea,,34,Newcastle,,1,1
+374,868320,2023-05-28T15:30:00+00:00,52,Crystal Palace,,65,Nottingham Forest,,1,1
+375,868321,2023-05-28T15:30:00+00:00,45,Everton,True,35,Bournemouth,False,1,0
+376,868322,2023-05-28T15:30:00+00:00,63,Leeds,False,47,Tottenham,True,1,4
+377,868323,2023-05-28T15:30:00+00:00,46,Leicester,True,48,West Ham,False,2,1
+378,868324,2023-05-28T15:30:00+00:00,33,Manchester United,True,36,Fulham,False,2,1
+379,868325,2023-05-28T15:30:00+00:00,41,Southampton,,40,Liverpool,,4,4
