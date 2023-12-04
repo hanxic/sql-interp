@@ -265,18 +265,16 @@ nameP = P.filter isValidName (wsP $ some baseP)
 varP :: Parser Var
 varP =
   wsP
-    ( ( VarName
-          <$> P.filter
-            (`notElem` reservedKeyWords)
-            nameP
-      )
-        <|> ( QuotedName
-                <$> P.filter
-                  (`notElem` reservedKeyWords)
-                  (stringInP '\"' some)
-            )
-            -- String name for column should be not empty)
+    ( (Dot <$> pFVarName <*> (P.char '.' *> pFVarName))
+        <|> (VarName <$> pFVarName)
+        -- String name for column should be not empty)
     )
+
+pFVarName :: Parser String
+pFVarName =
+  P.filter
+    (`notElem` reservedKeyWords)
+    nameP
 
 -- >>> P.parse varP "1st"
 -- Left "No parses"
@@ -289,39 +287,8 @@ test_varP =
       P.parse varP "st1" ~?= Right (VarName "st1"),
       P.parse varP "\"\"" ~?= errorMsgUnitTest,
       -- TODO: not dealing with "\t" here. Maybe we should?
-      P.parse varP "\"1st\"" ~?= Right (QuotedName "1st")
+      P.parse varP "st.st1" ~?= Right (Dot "st" "st1")
     ]
-
--- >>> P.parse expP "1 AND b OR 1"
--- Right (Op2 (Op2 (Val (IntVal 1)) And (Var (VarName "b"))) Or (Val (IntVal 1)))
-
-test =
-  Op2 (AggFun Count Distinct (Val (IntVal 3028638))) Plus (Op1 Not (Op1 Neg (Fun Upper (Val (StringVal "\23278\DC2 q9m\158086\SO\1002059\DC3\b)\39083'\1108928")))))
-
-{- Fun Len Distinct (Val (StringVal "\993599")) -}
-
--- >>> SPP.pretty test
--- "COUNT(DISTINCT 3028638) + NOT - UPPER('\23278\DC2 q9m\158086\SO\1002059\DC3\b)\39083'\1108928')"
-
-test2 = "COUNT(DISTINCT 3028638) + NOT - UPPER('\23278\DC2 q9m\158086\SO\1002059\DC3\b)\39083'\1108928')"
-
--- >>> P.parse expP test2
--- Right (AggFun Count Distinct (Val (IntVal 3028638)))
-
--- >>> Char.ord '\''
--- 39
-
-test4 =
-  Op2
-    (Fun Lower (Val (StringVal "2\1046076\46352\1096575 \983403")))
-    Plus
-    (Op2 (AggFun Avg Distinct (Var (VarName "Var2"))) And (Fun Len (Var (QuotedName "Var5"))))
-
--- >>> P.parse aggFunP test2
--- Left "No parses"
-
--- >>> P.parse expP "(Var0 IS NULL) % LENGTH('QR\1053562I'N')"
--- Right (Op2 (Var (VarName "Var0")) Is (Val NullVal))
 
 expP :: Parser Expression
 expP = orBopP
@@ -398,7 +365,7 @@ catchAnyWordL :: String -> Parser [a] -> Parser [a]
 catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.anyWord)))
 
 columnExpressionP :: Parser ColumnExpression
-columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> varP) <|> ColumnName <$> expP <|> starP
+columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> nameP) <|> ColumnName <$> expP <|> starP
 
 exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
 exprsSelectP =
@@ -412,10 +379,10 @@ test_exprsSelectP :: Test
 test_exprsSelectP =
   TestList
     [ P.parse exprsSelectP "SELECT A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS \"Something else\"" ~?= Right [(All, ColumnAlias (Var $ VarName "A") (QuotedName "Something else"))],
-      P.parse exprsSelectP "SELECT DISTINCT A AS \"Something else\"" ~?= Right [(Distinct, ColumnAlias (Var $ VarName "A") (QuotedName "Something else"))],
+      P.parse exprsSelectP "SELECT A AS Something" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something")],
+      P.parse exprsSelectP "SELECT DISTINCT A AS Something" ~?= Right [(Distinct, ColumnAlias (Var $ VarName "A") "Something")],
       P.parse exprsSelectP "SELECT A A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS \"Something else\", B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") (QuotedName "Something else")), (All, ColumnAlias (Var $ VarName "B") (VarName "C"))],
+      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something else"), (All, ColumnAlias (Var $ VarName "B") "C")],
       P.parse exprsSelectP "SELECT" ~?= errorMsgUnitTest
     ]
 
@@ -470,31 +437,131 @@ joinStyleP = str2JoinStyle <$> wsP (P.choice (map P.string ["LEFT JOIN", "RIGHT 
         "JOIN" -> InnerJoin
         _ -> OuterJoin -}
 
+optionalParens :: Parser a -> Parser a
+optionalParens p = p <|> wsP (parens p)
+
+optionalSpaceParens :: Parser a -> Parser a
+optionalSpaceParens = optionalParens . wsP
+
+joinNamesPAux :: Parser (Var, Var)
+joinNamesPAux = (,) <$> wsP varP <*> (P.equalSign *> wsP varP)
+
+test_joinNamesPAux :: Test
+test_joinNamesPAux =
+  TestList
+    [ P.parse joinNamesPAux " A = B" ~?= Right (VarName "A", VarName "B"),
+      P.parse joinNamesPAux "A.C = B.C" ~?= Right (Dot "A" "C", Dot "B" "C")
+    ]
+
+-- >>> P.parse joinNamesPAux "A = B"
+-- Right (VarName "A",VarName "B")
+
+joinNamesP :: Parser JoinNames
+joinNamesP = wsP (P.string joinNamesKW) *> P.sepBy joinNamesPAux (wsP P.comma)
+  where
+    joinNamesKW = "ON"
+
+-- >>> P.doParse joinNamesP "ON A = B"
+-- Just ([(VarName "A",VarName "B")],"")
+
+test_joinNamesP :: Test
+test_joinNamesP =
+  TestList
+    [ P.parse joinNamesP "ON A = B, C = D" ~?= Right [(VarName "A", VarName "B"), (VarName "C", VarName "D")],
+      P.parse joinNamesP "ON A.C = B.C, E.F   = G.H" ~?= Right [(Dot "A" "C", Dot "B" "C"), (Dot "E" "F", Dot "G" "H")]
+    ]
+
+data FakeFromExpression
+  = Fake TableName
+  | FakeAlias TableName TableName
+  | FakeOn FakeFromExpression JoinNames
+  | FakeJoin FakeFromExpression JoinStyle FakeFromExpression
+  deriving (Eq, Show)
+
+fakeFromExpressionP :: Parser FakeFromExpression
+fakeFromExpressionP = joinP
+  where
+    joinP = baseP `P.chainl1` joinPAux
+    joinPAux :: Parser (FakeFromExpression -> FakeFromExpression -> FakeFromExpression)
+    joinPAux = flip FakeJoin <$> joinStyleP
+    baseP =
+      FakeOn <$> parens fakeFromExpressionP <*> joinNamesP
+        <|> FakeOn <$> (FakeAlias <$> nameP <*> (wsP (P.string "AS") *> nameP)) <*> joinNamesP
+        <|> FakeAlias <$> nameP <*> (wsP (P.string "AS") *> nameP)
+        <|> FakeOn <$> (Fake <$> pFVarName) <*> joinNamesP
+        <|> Fake <$> pFVarName
+
+test_fakeFromExpressionP :: Test
+test_fakeFromExpressionP =
+  TestList
+    [ P.parse fakeFromExpressionP "A JOIN B" ~?= Right (FakeJoin (Fake "A") InnerJoin (Fake "B")),
+      P.parse fakeFromExpressionP "A JOIN B ON X = Y" ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y")])),
+      P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y" ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
+      P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y JOIN C ON Z = W" ~?= Right (FakeJoin (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])) InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])),
+      P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])) [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
+      P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])) [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
+      P.parse fakeFromExpressionP "A AS C JOIN B AS D ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (FakeAlias "A" "C") InnerJoin (FakeOn (FakeAlias "B" "D") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")]))
+    ]
+
+-- >>> P.doParse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W)"
+-- Just (Fake "A","JOIN (B JOIN C ON Z = W)")
+
+fakeFE2FE :: FakeFromExpression -> FromExpression
+fakeFE2FE (Fake str) = TableRef str
+fakeFE2FE (FakeAlias str1 str2) = TableAlias str1 str2
+fakeFE2FE (FakeJoin ffe1 js (FakeOn ffe2 jns)) =
+  let fe1 = fakeFE2FE ffe1
+   in let fe2 = fakeFE2FE ffe2
+       in Join fe1 js fe2 jns
+fakeFE2FE (FakeJoin ffe1 js ffe2) =
+  let fe1 = fakeFE2FE ffe1
+   in let fe2 = fakeFE2FE ffe2
+       in Join fe1 js fe2 []
+fakeFE2FE (FakeOn ffe _) = fakeFE2FE ffe -- This case will not happen
+{-
 fromSelectPAux :: Parser FromExpression
 fromSelectPAux = joinP
   where
     joinP = baseP `P.chainl1` joinPAux
-    joinPAux = flip Join <$> joinStyleP
+    joinPAux :: Parser (FromExpression -> FromExpression -> FromExpression)
+    joinPAux = undefined
     baseP =
-      TableRef
-        <$> P.filter
-          (`notElem` reservedKeyWords)
-          nameP
+      TableAlias <$> nameP <*> (wsP (P.string "AS") *> nameP)
+        <|> TableRef
+          <$> pFVarName
         <|> SubQuery <$> parens scP
-        <|> parens fromSelectPAux
+        <|> parens fromSelectPAux -}
+{-
+test_fromSelectPAux :: Test
+test_fromSelectPAux =
+  TestList
+    [ P.parse fromSelectPAux "A" ~?= Right (TableRef "A"),
+      P.parse fromSelectPAux "A JOIN B" ~?= Right (Join (TableRef "A") InnerJoin (TableRef "B") []),
+      P.parse fromSelectPAux "A AS C JOIN B" ~?= Right (Join (TableAlias "A" "C") InnerJoin (TableRef "B") []),
+      P.parse fromSelectPAux "A AS C JOIN B AS D ON E= F "
+        ~?= Right
+          (Join (TableAlias "A" "C") InnerJoin (TableAlias "B" "D") [(VarName "E", VarName "F")]),
+      P.parse
+        fromSelectPAux
+        "FROM A JOIN B LEFT JOIN C"
+        ~?= Right (Join (Join (TableRef "A") InnerJoin (TableRef "B") []) LeftJoin (TableRef "C") [])
+    ] -}
 
 {- opAtLevel :: Int -> Parser (Expression -> Expression -> Expression)
 opAtLevel l = flip Op2 <$> P.filter (\x -> level x == l) bopP-}
 
+{- fromSelectP :: Parser FromExpression
+fromSelectP = wsP (P.string "FROM") *> fromSelectPAux -}
 fromSelectP :: Parser FromExpression
-fromSelectP = wsP (P.string "FROM") *> fromSelectPAux
+fromSelectP = wsP (P.string "FROM") *> (fakeFE2FE <$> fakeFromExpressionP)
 
 test_fromSelectP :: Test
 test_fromSelectP =
   TestList
     [ P.parse fromSelectP "FROM A" ~?= Right (TableRef "A"),
-      P.parse fromSelectP "FROM A JOIN B" ~?= Right (Join (TableRef "A") InnerJoin (TableRef "B")),
-      P.parse fromSelectP "FROM A JOIN B LEFT JOIN C" ~?= Right (Join (Join (TableRef "A") InnerJoin (TableRef "B")) LeftJoin (TableRef "C"))
+      P.parse fromSelectP "FROM A JOIN B" ~?= Right (Join (TableRef "A") InnerJoin (TableRef "B") []),
+      P.parse fromSelectP "FROM A JOIN B LEFT JOIN C" ~?= Right (Join (Join (TableRef "A") InnerJoin (TableRef "B") []) LeftJoin (TableRef "C") []),
+      P.parse fromSelectP "FROM A JOIN B ON C = D" ~?= Right (Join (TableRef "A") InnerJoin (TableRef "B") [(VarName "C", VarName "D")])
     ]
 
 whSelectP :: Parser (Maybe Expression)

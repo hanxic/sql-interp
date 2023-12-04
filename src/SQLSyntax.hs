@@ -3,6 +3,7 @@
 
 module SQLSyntax where
 
+import AList
 import Control.Monad (mapM_)
 import Data.Char qualified as Char
 import Data.List (concat)
@@ -32,7 +33,7 @@ Equivalence Rules: https://www.postgresql.org/message-id/attachment/32513/Equiva
 
 data ColumnExpression
   = ColumnName Expression -- e.g. SELECT A / SELECT (A * 2) / SELECT SUM(A) / SELECT SUM(2)
-  | ColumnAlias Expression Var -- e.g. SELECT A AS B
+  | ColumnAlias Expression Name -- e.g. SELECT A AS B
   | AllVar
   deriving (Eq, Show)
 
@@ -45,9 +46,9 @@ type TableName = String
 
 data FromExpression
   = TableRef TableName -- e.g. FROM TEST
-  | -- | TableAlias TableName Var -- e.g. FROM A AS B
-    SubQuery SelectCommand -- e.g. FROM (SELECT ...)
-  | Join JoinStyle JoinExpression -- e.g. FROM A JOIN B
+  | TableAlias TableName TableName -- e.g. FROM A AS B
+  | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
+  | Join FromExpression JoinStyle FromExpression JoinNames -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle
@@ -57,12 +58,7 @@ data JoinStyle
   | OuterJoin
   deriving (Eq, Show, Enum, Bounded)
 
-data JoinExpression
-  = UnamedJoin FromExpression FromExpression
-  | NamedJoin FromExpression FromExpression JoinName JoinName
-  deriving (Eq, Show)
-
-type JoinName = NE.NonEmpty Name
+type JoinNames = [(Var, Var)]
 
 isBase :: Expression -> Bool
 isBase Val {} = True
@@ -97,7 +93,10 @@ data Expression
   | Fun Function Expression -- e.g. SUM / AVG
   deriving (Eq, Show)
 
-type Var = Name
+data Var
+  = VarName Name
+  | Dot Name Name
+  deriving (Eq, Show)
 
 -- data Var
 --   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
@@ -190,7 +189,7 @@ data UpsertIntoCommand = UpsertIntoCommand
 -- **** Section for DeleteCommand ****
 
 data DeleteCommand = DeleteCommand
-  { fromDelete :: FromExpression,
+  { fromDelete :: TableName, -- Not supposed to have subquery in this case
     whDelete :: Maybe Expression
   }
   deriving (Eq, Show)

@@ -59,18 +59,18 @@ genTablePool = do
   i <- QC.chooseInt (1, maxSize)
   return ["Table" ++ show j | j <- [0, i]]
 
-genVarWOAllVar :: Gen Var
+{- genVarWOAllVar :: Gen Var
 genVarWOAllVar =
   QC.frequency
     [ (1, VarName <$> (QC.elements =<< genNamePool)),
-      (1, QuotedName <$> (QC.elements =<< genNamePool))
-    ]
+      (1, Dot <$> (QC.elements =<< genTablePool) <*> (QC.elements =<< genNamePool))
+    ] -}
 
 instance Arbitrary Var where
   arbitrary =
     QC.frequency
       [ (1, VarName <$> (QC.elements =<< genNamePool)),
-        (1, QuotedName <$> (QC.elements =<< genNamePool))
+        (1, Dot <$> (QC.elements =<< genTablePool) <*> (QC.elements =<< genNamePool))
       ]
 
 genPos :: Gen Int
@@ -172,7 +172,7 @@ genFromExpression n =
   QC.frequency
     [ (n, TableRef <$> (QC.elements =<< genTablePool)),
       (1, SubQuery <$> arbitrary),
-      (n, Join <$> genFromExpression n' <*> arbitrary <*> genFromExpression n')
+      (n, Join <$> genFromExpression n' <*> arbitrary <*> genFromExpression n' <*> QC.sized (`constrainSize` arbitrary))
     ]
   where
     n' = n `div` 2
@@ -185,7 +185,7 @@ instance Arbitrary ColumnExpression where
   arbitrary =
     QC.frequency
       [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
-        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> genVarWOAllVar), -- This will cause some problem if alias is something that is invalid
+        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> arbitrary), -- This will cause some problem if alias is something that is invalid
         (1, return AllVar)
       ]
 
@@ -203,16 +203,23 @@ patchWVar (Op2 e1 u e2) =
 patchWVar (AggFun af cs e) = AggFun af cs <$> patchWVar e
 patchWVar (Fun f e) = Fun f <$> patchWVar e
 
+constrainSize1 :: Int -> Gen a -> Gen [a]
+constrainSize1 n g | n <= 0 = (: []) <$> g
+constrainSize1 n g = do
+  x <- g
+  xs <- constrainSize1 n' g
+  return $ x : xs
+  where
+    n' = n `div` 2
+
 constrainSize :: Int -> Gen a -> Gen [a]
-constrainSize n g | n <= 0 = (: []) <$> g
+constrainSize n _ | n <= 0 = return []
 constrainSize n g = do
   x <- g
   xs <- constrainSize n' g
   return $ x : xs
   where
     n' = n `div` 2
-
-test5 = QC.sample (QC.sized (`constrainSize` (QC.arbitrary :: Gen ColumnExpression)))
 
 genSelectCommand :: Int -> Gen SelectCommand
 genSelectCommand n =
@@ -242,7 +249,7 @@ instance Arbitrary CreateCommand where
       <$> arbitrary
       <*> (QC.elements =<< genTablePool)
       <*> QC.sized
-        ( `constrainSize`
+        ( `constrainSize1`
             ( (,,,)
                 <$> (QC.elements =<< genNamePool)
                 <*> arbitrary

@@ -110,10 +110,6 @@ instance PP Bop where
   pp Like = PP.text "LIKE"
   pp Is = PP.text "IS"
 
-instance PP Var where
-  pp (VarName name) = PP.text name
-  pp (QuotedName name) = PP.text ("\"" <> name <> "\"")
-
 instance PP Expression where
   pp (Var v) = pp v
   pp (Val v) = pp v
@@ -143,11 +139,26 @@ isBaseFromExpression :: FromExpression -> Bool
 isBaseFromExpression (TableRef _) = True
 isBaseFromExpression _ = False
 
+instance PP Var where
+  pp (VarName name) = PP.text name
+  pp (Dot n1 n2) = PP.text n1 <> PP.char '.' <> PP.text n2
+
+getTableName :: FromExpression -> TableName
+getTableName (TableRef tname) = tname
+getTableName (TableAlias _ var) = PP.render $ pp var
+getTableName _ = ""
+
+renderJoinNames :: JoinNames -> Doc
+renderJoinNames =
+  PP.hcat
+    . PP.punctuate PP.comma
+    . map (\(n1, n2) -> pp n1 <> PP.text "=" <> pp n2)
+
 instance PP FromExpression where
   pp (TableRef texp) = pp texp
-  {- pp (TableAlias texp var) = pp texp <+> pp var -}
+  pp (TableAlias texp var) = pp texp <+> PP.text "AS" <+> pp var
   pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc
-  pp (Join fexp1 js fexp2) =
+  pp (Join fexp1 js fexp2 jns) =
     let ppExp1 =
           if isBaseFromExpression fexp1
             then pp fexp1
@@ -156,7 +167,19 @@ instance PP FromExpression where
               if isBaseFromExpression fexp2
                 then pp fexp2
                 else PP.parens $ pp fexp2
-         in ppExp1 <+> pp js <+> ppExp2
+         in let ppJns = if null jns then PP.empty else PP.text "ON" <+> renderJoinNames jns
+             in ppExp1 <+> pp js <+> ppExp2 <+> ppJns
+
+{-   pp (Join js (NamedJoin fexp1 fexp2 jn1 jn2)) =
+    let ppExp1 =
+          if isBaseFromExpression fexp1
+            then pp fexp1
+            else PP.parens $ pp fexp1
+     in let ppExp2 =
+              if isBaseFromExpression fexp2
+                then pp fexp2
+                else PP.parens $ pp fexp2
+         in ppExp1 <+> pp js <+> ppExp2 -}
 
 instance PP CountStyle where
   pp Distinct = PP.text "DISTINCT"
@@ -213,12 +236,6 @@ ppSE (cs, te@(ColumnAlias e v)) =
   pp cs <+> if isBaseTableExpression te then pp te else PP.parens (pp e) <+> PP.text "AS" <+> pp v
 ppSE (cs, AllVar) =
   pp cs <+> pp AllVar
-
-test_ppSE :: Test
-test_ppSE =
-  TestList
-    [ ppSE (Distinct, ColumnAlias (Op2 (Fun Len (Val (StringVal "1k"))) Minus (Var (QuotedName "Var1"))) (VarName "Var0")) ~?= PP.text "DISTINCT (LENGTH('1k') - \"Var1\") AS Var0"
-    ]
 
 ppOB :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> Doc
 ppOB (v, o1, o2) =

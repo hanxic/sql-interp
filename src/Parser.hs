@@ -35,6 +35,7 @@ module Parser
     anyChar,
     anyWord,
     comma,
+    equalSign,
   )
 where
 
@@ -142,6 +143,9 @@ underscore = char '_'
 
 comma = char ','
 
+equalSign :: Parser Char
+equalSign = char '='
+
 -- | Parses and returns the specified character
 -- succeeds only if the input is exactly that character
 char :: Char -> Parser Char
@@ -212,6 +216,13 @@ p `chainl1` pop = foldl comb <$> p <*> rest
 -- If there are no occurrences of @p@, then @x@ is returned.
 chainl :: Parser b -> Parser (b -> b -> b) -> b -> Parser b
 chainl p pop x = chainl1 p pop <|> pure x
+
+{-
+chainl1S :: Parser a -> Parser b -> Parser (a -> a -> b -> a) -> Parser a
+chainl1S p resp pop = foldl comb <$> p <*> rest
+  where
+    comb x (op, y) = x `op` y
+    rest = many ((,) <$> pop <*> p) -}
 
 -- | Combine all parsers in the list (sequentially)
 choice :: [Parser a] -> Parser a

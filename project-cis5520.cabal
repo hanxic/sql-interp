@@ -31,7 +31,8 @@ common common-stanza
     , network
     , directory
     , random
-    , mtl
+    , mtl,
+    fin
   default-language:
     GHC2021
   default-extensions:
@@ -53,6 +54,7 @@ library
       SQLParser
       SQLPrinter
       SQLSyntax
+      AList
   hs-source-dirs:
       src
 
