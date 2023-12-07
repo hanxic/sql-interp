@@ -10,6 +10,7 @@ import GHC.Generics (D)
 import GenSQL
 import Parser (Parser)
 import Parser qualified as P
+import SQLParser qualified as P
 import SQLParser qualified as SP
 import SQLSyntax
 import TablePrinter qualified as TP
@@ -25,6 +26,9 @@ prop_roundtrip_row :: AnnotatedHeader -> Bool
 prop_roundtrip_row ah =
   let (r :: Row) = undefined
    in P.parse (rowP ah) (TP.pretty r) == Right r
+
+prop_roundtrip_dvalueT :: DValue -> Bool
+prop_roundtrip_dvalueT = undefined
 
 prop_roundtrip_table :: Table -> Bool
 prop_roundtrip_table t = P.parse tableP (TP.pretty t) == Right t
@@ -51,6 +55,25 @@ validHeaderP pkVarList iNameVarList = headerP >>= validHeaderPAux pkVarList iNam
         else empty -}
 
 type AnnotatedHeader = IndexName
+
+reservedTKeywords :: [String]
+reservedTKeywords = [","]
+
+{- Redefine our own value -}
+{- NullVal <$ lookAhead (P.comma) -}
+
+nullValTP :: Parser DValue
+nullValTP = NullVal <$ P.lookAhead P.comma
+
+stringValTP :: Parser DValue
+stringValTP =
+  SP.stringValP
+    <|> ( StringVal
+            <$> some (P.satisfy (\x -> x /= ',' && not (Char.isSpace x)))
+        )
+
+dvalueTP :: Parser DValue
+dvalueTP = P.intValP <|> P.boolValP <|> nullValTP <|> stringValTP
 
 validHeaderP :: PrimaryKeys -> IndexName -> Parser AnnotatedHeader
 validHeaderP pkVarList iNameVarList = headerP >>= validHeaderPAux pkVarList iNameVarList
@@ -109,9 +132,9 @@ rowPAux :: AnnotatedHeader -> Row -> Parser Row
 rowPAux ah row =
   case ah of
     [] -> row <$ many P.space
-    [x] -> validValP x row =<< SP.wsP SP.dvalueP
+    [x] -> validValP x row =<< SP.wsP dvalueTP
     (x : xs) ->
-      (SP.wsP SP.dvalueP <* SP.wsP P.comma)
+      (SP.wsP dvalueTP <* SP.wsP P.comma)
         >>= validValP x row
         >>= rowPAux xs
   where
