@@ -500,7 +500,20 @@ test_fakeFromExpressionP =
       P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y" ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
       P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y JOIN C ON Z = W" ~?= Right (FakeJoin (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])) InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])),
       P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])) [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
-      P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])) [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
+      P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y "
+        ~?= Right
+          ( FakeJoin
+              (Fake "A")
+              InnerJoin
+              ( FakeOn
+                  (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")]))
+                  [ (VarName "X", VarName "Y"),
+                    ( Dot "A" "X",
+                      Dot "B" "Y"
+                    )
+                  ]
+              )
+          ),
       P.parse fakeFromExpressionP "A AS C JOIN B AS D ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (FakeAlias "A" "C") InnerJoin (FakeOn (FakeAlias "B" "D") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")]))
     ]
 
@@ -554,7 +567,7 @@ opAtLevel l = flip Op2 <$> P.filter (\x -> level x == l) bopP-}
 {- fromSelectP :: Parser FromExpression
 fromSelectP = wsP (P.string "FROM") *> fromSelectPAux -}
 fromSelectP :: Parser FromExpression
-fromSelectP = wsP (P.string "FROM") *> (fakeFE2FE <$> fakeFromExpressionP <|> SubQuery <$> parens scP)
+fromSelectP = wsP (P.string "FROM") *> (fakeFE2FE <$> fakeFromExpressionP {- <|> SubQuery <$> parens scP -})
 
 test_fromSelectP :: Test
 test_fromSelectP =

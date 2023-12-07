@@ -9,16 +9,28 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
 import SQLSyntax
 
+data Store = Store
+  { scope :: Scope,
+    alias :: Map TableName TableName
+  }
+  deriving (Eq, Show)
+
 type Scope = Map TableName Table
 
 data Table = Table
   { indexName :: IndexName,
     tableData :: TableData
   }
+  deriving (Eq, Show)
 
 type TableData = [Row]
 
-type IndexName = NE.NonEmpty Name
+type IndexName = NE.NonEmpty (Name, IndexAttribute)
+
+data IndexAttribute
+  = Regular
+  | PrimaryKey
+  deriving (Eq, Show, Bounded, Enum)
 
 type Row = Map Name DValue
 

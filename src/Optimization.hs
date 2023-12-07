@@ -24,7 +24,7 @@ insert c t = undefined
 fromList :: [Query] -> AST
 fromList = foldr insert emptyAST
 
-evalAST :: AST -> TableMap
+evalAST :: AST -> Scope
 evalAST t = undefined
 
 optimizeSelectAll :: AST -> AST

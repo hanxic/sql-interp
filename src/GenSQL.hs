@@ -2,9 +2,11 @@ module GenSQL where
 
 import Control.Monad (liftM2, liftM3, mapM_, replicateM)
 import Data.Char qualified as Char
+import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
+import TableSyntax
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
@@ -180,7 +182,8 @@ genFromExpression n =
 instance Arbitrary FromExpression where
   arbitrary = do
     n <- QC.sized (\x -> QC.chooseInt (1, x))
-    QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)]
+    {- QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)] -}
+    QC.sized genFromExpression
 
 instance Arbitrary ColumnExpression where
   arbitrary =
@@ -274,6 +277,17 @@ instance Arbitrary DeleteCommand where
       <$> (QC.elements =<< genTablePool)
       <*> arbitrary
 
+{- Generate Table -}
+
+instance Arbitrary IndexName where
+  arbitrary = NE.fromList <$> atLeastN 1 ((,) <$> (QC.elements =<< genNamePool) <*> arbitrary)
+
+instance Arbitrary Table where
+  arbitrary = Table <$> arbitrary <*> arbitrary
+
+instance Arbitrary Store where
+  arbitrary = Store <$> arbitrary <*> arbitrary
+
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where
   arbitrary = QC.arbitraryBoundedEnum
@@ -297,4 +311,7 @@ instance Arbitrary JoinStyle where
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary CountStyle where
+  arbitrary = QC.arbitraryBoundedEnum
+
+instance Arbitrary IndexAttribute where
   arbitrary = QC.arbitraryBoundedEnum

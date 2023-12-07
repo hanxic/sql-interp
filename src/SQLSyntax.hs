@@ -45,8 +45,8 @@ type TableName = String
 data FromExpression
   = TableRef TableName -- e.g. FROM TEST
   | TableAlias TableName TableName -- e.g. FROM A AS B
-  | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
-  | Join FromExpression JoinStyle FromExpression JoinNames -- e.g. FROM A JOIN B
+  | -- | SubQuery SelectCommand -- e.g. FROM (SELECT ...)
+    Join FromExpression JoinStyle FromExpression JoinNames -- e.g. FROM A JOIN B
   deriving (Eq, Show)
 
 data JoinStyle
@@ -94,7 +94,7 @@ data Expression
 data Var
   = VarName Name
   | Dot Name Name
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 -- data Var
 --   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet

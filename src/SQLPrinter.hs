@@ -145,7 +145,7 @@ instance PP Var where
 
 getTableName :: FromExpression -> TableName
 getTableName (TableRef tname) = tname
-getTableName (TableAlias _ var) = PP.render $ pp var
+{- getTableName (TableAlias _ var) = PP.render $ pp var -}
 getTableName _ = ""
 
 renderJoinNames :: JoinNames -> Doc
@@ -157,7 +157,7 @@ renderJoinNames =
 instance PP FromExpression where
   pp (TableRef texp) = pp texp
   pp (TableAlias texp var) = pp texp <+> PP.text "AS" <+> pp var
-  pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc
+  {- pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc -}
   pp (Join fexp1 js fexp2 jns) =
     let ppExp1 =
           if isBaseFromExpression fexp1
