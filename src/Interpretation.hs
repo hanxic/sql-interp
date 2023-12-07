@@ -153,31 +153,38 @@ evaluate (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) initialStore ~?
 
 mergeIndex :: IndexName -> IndexName -> IndexName
 mergeIndex in1 in2 =
-  let inMap1 = Map.fromList $ NE.toList in1
-   in let inMap2 = Map.fromList $ NE.toList in2
-       in NE.fromList $ Map.toList $ Map.union inMap1 inMap2
+  let inMap1 = Map.fromList in1
+   in let inMap2 = Map.fromList in2
+       in Map.toList $ Map.union inMap1 inMap2
+
+mergePrimaryKeys :: PrimaryKeys -> PrimaryKeys -> PrimaryKeys
+mergePrimaryKeys pk1 pk2 =
+  NE.fromList $ mergeIndex (NE.toList pk1) (NE.toList pk2)
 
 joinMid :: Table -> Table -> (Row -> Row -> Bool) -> Table
-joinMid (Table in1 td1) (Table in2 td2) joinSpec =
+joinMid (Table pk1 in1 td1) (Table pk2 in2 td2) joinSpec =
   Table
+    (mergePrimaryKeys pk1 pk2)
     (mergeIndex in1 in2)
     [row1 `Map.union` row2 | row1 <- td1, row2 <- td2, joinSpec row1 row2]
 
 joinLeftEx :: Table -> Table -> (Row -> Row -> Bool) -> Table
-joinLeftEx table1@(Table in1 td1) table2@(Table in2 td2) joinSpec =
+joinLeftEx table1@(Table pk1 in1 td1) table2@(Table pk2 in2 td2) joinSpec =
   let keys2 = keys $ head td2
    in let uninitRow = Map.fromList $ List.map (,NullVal) keys2
        in let tdLeft = [row1 `Map.union` uninitRow | row1 <- td1, (not . any (joinSpec row1)) td2]
            in Table
+                (mergePrimaryKeys pk1 pk2)
                 (mergeIndex in1 in2)
                 tdLeft
 
 joinRightEx :: Table -> Table -> (Row -> Row -> Bool) -> Table
-joinRightEx table1@(Table in1 td1) table2@(Table in2 td2) joinSpec =
+joinRightEx table1@(Table pk1 in1 td1) table2@(Table pk2 in2 td2) joinSpec =
   let keys1 = keys $ head td1
    in let uninitRow = Map.fromList $ List.map (,NullVal) keys1
        in let tdRight = [row2 `Map.union` uninitRow | row2 <- td2, (not . any (joinSpec row2)) td1]
            in Table
+                (mergePrimaryKeys pk1 pk2)
                 (mergeIndex in2 in1)
                 tdRight
 
@@ -191,18 +198,18 @@ evalJoinStyle table1 LeftJoin table2 joinSpec =
     else
       let tableLeft = joinLeftEx table1 table2 joinSpec
        in let tableMid = joinMid table1 table2 joinSpec
-           in return $ Table (indexName tableLeft) (tableData tableLeft ++ tableData tableMid)
+           in return $ Table (primaryKeys tableLeft) (indexName tableLeft) (tableData tableLeft ++ tableData tableMid)
 evalJoinStyle table1 RightJoin table2 joinSpec =
   if List.null $ tableData table1
     then return table2
     else
       let tableRight = joinRightEx table1 table2 joinSpec
        in let tableMid = joinMid table1 table2 joinSpec
-           in return $ Table (indexName tableRight) (tableData tableRight ++ tableData tableMid)
+           in return $ Table (primaryKeys tableRight) (indexName tableRight) (tableData tableRight ++ tableData tableMid)
 evalJoinStyle table1 OuterJoin table2 joinSpec = do
   tableLeftMid <- evalJoinStyle table1 LeftJoin table2 joinSpec
   let tableRight = joinRightEx table1 table2 joinSpec
-   in return $ Table (indexName tableLeftMid) (tableData tableLeftMid ++ tableData tableRight)
+   in return $ Table (primaryKeys tableLeftMid) (indexName tableLeftMid) (tableData tableLeftMid ++ tableData tableRight)
 
 {-
 Anything in left + anything in middle
@@ -277,12 +284,13 @@ emptyTableData :: TableData
 emptyTableData = []
 
 emptyIndexName :: IndexName
-emptyIndexName = NE.singleton ("", Regular)
+emptyIndexName = []
 
 emptyTable :: Table
 emptyTable =
   Table
-    { indexName = emptyIndexName,
+    { primaryKeys = NE.singleton ("default", BoolType),
+      indexName = emptyIndexName,
       tableData = emptyTableData
     }
 
