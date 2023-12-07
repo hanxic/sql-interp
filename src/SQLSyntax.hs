@@ -150,6 +150,13 @@ data DValue
   | NullVal
   deriving (Eq, Show, Ord)
 
+dvalueTypeCheck :: DValue -> DType -> Bool
+dvalueTypeCheck NullVal _ = True
+dvalueTypeCheck (IntVal _) (IntType _) = True
+dvalueTypeCheck (BoolVal _) BoolType = True
+dvalueTypeCheck (StringVal _) (StringType _) = True
+dvalueTypeCheck _ _ = False
+
 type Name = String
 
 data OrderTypeAD

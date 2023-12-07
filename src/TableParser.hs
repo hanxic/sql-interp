@@ -5,7 +5,7 @@ import Control.Monad
 import Data.Char qualified as Char
 import Data.List (sort, sortOn)
 import Data.List.NonEmpty qualified as NE
-import Data.Map as Map (Map, fromList)
+import Data.Map as Map (Map, empty, fromList, insert)
 import GHC.Generics (D)
 import GenSQL
 import Parser (Parser)
@@ -21,8 +21,10 @@ import Text.PrettyPrint (Doc, render)
 prop_roundtrip_header :: Header -> Bool
 prop_roundtrip_header h = P.parse headerP (Text.PrettyPrint.render $ TP.ppHeader h) == Right h
 
-{- prop_roundtrip_row :: Row -> Bool
-prop_roundtrip_row r = P.parse rowP (TP.pretty r) == Right r -}
+prop_roundtrip_row :: AnnotatedHeader -> Bool
+prop_roundtrip_row ah =
+  let (r :: Row) = undefined
+   in P.parse (rowP ah) (TP.pretty r) == Right r
 
 prop_roundtrip_table :: Table -> Bool
 prop_roundtrip_table t = P.parse tableP (TP.pretty t) == Right t
@@ -56,8 +58,8 @@ validHeaderP pkVarList iNameVarList = headerP >>= validHeaderPAux pkVarList iNam
 validHeaderPAux :: PrimaryKeys -> IndexName -> Header -> Parser AnnotatedHeader
 validHeaderPAux pk iName header =
   if not $ checkRepetitive header && length header == length pk + length iName
-    then maybe empty return (annotateHeaderMaybe pk iName header)
-    else empty
+    then maybe Control.Applicative.empty return (annotateHeaderMaybe pk iName header)
+    else Control.Applicative.empty
   where
     annotateHeaderMaybe :: PrimaryKeys -> IndexName -> Header -> Maybe AnnotatedHeader
     annotateHeaderMaybe pk iName header =
@@ -101,7 +103,25 @@ checkRepetitive xs =
       x1 == x2 || checkRepetitiveAux (x2 : xs)
 
 rowP :: AnnotatedHeader -> Parser Row
-rowP = undefined {- P.sepBy SP.dvalueP P.comma -}
+rowP = flip rowPAux Map.empty
+
+rowPAux :: AnnotatedHeader -> Row -> Parser Row
+rowPAux ah row =
+  case ah of
+    [] -> row <$ many P.space
+    [x] -> validValP x row =<< SP.wsP SP.dvalueP
+    (x : xs) ->
+      (SP.wsP SP.dvalueP <* SP.wsP P.comma)
+        >>= validValP x row
+        >>= rowPAux xs
+  where
+    validValP :: (Var, DType) -> Row -> DValue -> Parser Row
+    validValP (var, dtype) row dvalue =
+      if dvalueTypeCheck dvalue dtype
+        then return $ Map.insert var dvalue row
+        else Control.Applicative.empty
+
+test = Char.isSpace
 
 tableP :: Parser Table
 tableP = undefined
