@@ -287,8 +287,15 @@ instance Arbitrary DeleteCommand where
       <*> arbitrary
 
 {- Generate Table -}
-
-genIndexName = QC.sized (`constrainSize1` ((,) <$> (QC.elements =<< genNamePool) <*> (arbitrary :: Gen DType)))
+genIndexName :: Gen [(Var, DType)]
+genIndexName =
+  QC.sized
+    ( `constrainSize1`
+        ( (,)
+            <$> arbitrary
+            <*> arbitrary
+        )
+    )
 
 instance Arbitrary PrimaryKeys where
   arbitrary = undefined

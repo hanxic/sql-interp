@@ -289,7 +289,7 @@ emptyIndexName = []
 emptyTable :: Table
 emptyTable =
   Table
-    { primaryKeys = NE.singleton ("default", BoolType),
+    { primaryKeys = NE.singleton (VarName "default", BoolType),
       indexName = emptyIndexName,
       tableData = emptyTableData
     }

@@ -62,7 +62,7 @@ instance PP OrderTypeAD where
 instance PP DValue where
   pp (IntVal i) = pp i
   pp (BoolVal b) = pp b
-  pp (StringVal s) = PP.text ("\'" <> s <> "\'")
+  pp (StringVal s) = PP.text ("\"" <> s <> "\"")
   pp NullVal = PP.text "NULL"
 
 instance PP DType where

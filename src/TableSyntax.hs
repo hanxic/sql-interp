@@ -24,16 +24,16 @@ data Table = Table
 
 type TableData = [Row]
 
-type IndexName = [(Name, DType)]
+type IndexName = [(Var, DType)]
 
-type PrimaryKeys = NE.NonEmpty (Name, DType)
+type PrimaryKeys = NE.NonEmpty (Var, DType)
 
 data IndexAttribute
   = Regular
   | PrimaryKey
   deriving (Eq, Show, Bounded, Enum)
 
-type Row = Map Name DValue
+type Row = Map Var DValue
 
 type ErrorMsg = String
 
@@ -44,3 +44,6 @@ data GroupBy a where
 type GroupByMap = Map Var (GroupBy DValue)
 
 type GroupByVars = NE.NonEmpty Name
+
+-- This is a temporary data structure and not with actual use in parser / printing
+type Header = [Var] -- True if it is a primary key, and false if not

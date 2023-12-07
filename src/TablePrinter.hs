@@ -30,7 +30,7 @@ ppDVal (IntVal i) = SPP.pp i
 ppDVal (BoolVal b) = SPP.pp b
 ppDVal NullVal = PP.text "NULL"
 ppDVal (StringVal s) =
-  let ppRegularString = PP.text ("\'" <> s <> "\'")
+  let ppRegularString = PP.doubleQuotes $ PP.text s
    in if not $ hasWhiteSpace s && notElem s reservedKeyWords then PP.text s else ppRegularString
 
 instance SPP.PP Row where
@@ -39,11 +39,11 @@ instance SPP.PP Row where
 test_ppRow :: Test
 test_ppRow =
   TestList
-    [ pretty (Map.fromList [("a", StringVal "c"), ("b", IntVal 2)]) ~?= "c,2",
-      pretty (Map.fromList [("a", BoolVal True), ("b", IntVal 2), ("c", StringVal "c")]) ~?= "TRUE,2,c",
-      pretty (Map.fromList [("a", BoolVal True), ("b", IntVal 2), ("c", StringVal "c d")]) ~?= "TRUE,2,'c d'",
-      pretty (Map.fromList [("a", BoolVal True), ("b", IntVal 2), ("c", StringVal "NULL")]) ~?= "TRUE,2,NULL",
-      pretty (Map.fromList [("a", StringVal "Hello"), ("b", StringVal "THERE")]) ~?= "Hello,THERE"
+    [ pretty (Map.fromList [(VarName "a", StringVal "c"), (VarName "b", IntVal 2)]) ~?= "c,2",
+      pretty (Map.fromList [(VarName "a", BoolVal True), (VarName "b", IntVal 2), (VarName "c", StringVal "c")]) ~?= "TRUE,2,c",
+      pretty (Map.fromList [(VarName "a", BoolVal True), (VarName "b", IntVal 2), (VarName "c", StringVal "c d")]) ~?= "TRUE,2,'c d'",
+      pretty (Map.fromList [(VarName "a", BoolVal True), (VarName "b", IntVal 2), (VarName "c", StringVal "NULL")]) ~?= "TRUE,2,NULL",
+      pretty (Map.fromList [(VarName "a", StringVal "Hello"), (VarName "b", StringVal "THERE")]) ~?= "Hello,THERE"
     ]
 
 test :: Row -> [Doc]
@@ -55,7 +55,7 @@ ppPrimaryKeys pk = ppLineCSV SPP.pp $ map fst $ NE.toList pk
 test_ppPrimaryKeys :: Test
 test_ppPrimaryKeys =
   TestList
-    [ render (ppPrimaryKeys (NE.fromList [("a", StringType 255), ("b", IntType 32), ("c", BoolType)])) ~?= "a,b,c"
+    [ render (ppPrimaryKeys (NE.fromList [(VarName "a", StringType 255), (VarName "b", IntType 32), (VarName "c", BoolType)])) ~?= "a,b,c"
     ]
 
 ppLineCSV :: (a -> Doc) -> [a] -> Doc
@@ -70,6 +70,9 @@ ppLine d = d <> PP.text "\n"
 ppRow :: IndexName -> Row -> Doc
 ppRow iName row = ppLineCSV ppDVal (map (\k -> Map.findWithDefault (StringVal "") (fst k) row) iName)
 
+ppHeader :: Header -> Doc
+ppHeader = ppLineCSV SPP.pp
+
 instance SPP.PP Table where
   pp (Table pk iName td) =
     let indices = NE.toList pk ++ iName
@@ -82,10 +85,10 @@ test_ppTable =
   TestList
     [ pretty
         ( Table
-            (NE.fromList [("a", StringType 255), ("b", BoolType)])
-            [("c", IntType 32), ("d", BoolType)]
+            (NE.fromList [(VarName "a", StringType 255), (VarName "b", BoolType)])
+            [(VarName "c", IntType 32), (VarName "d", BoolType)]
             [ Map.fromList
-                [("a", StringVal "hello"), ("b", BoolVal True), ("c", IntVal 255), ("d", BoolVal False), ("e", StringVal "Not a part")]
+                [(VarName "a", StringVal "hello"), (VarName "b", BoolVal True), (VarName "c", IntVal 255), (VarName "d", BoolVal False), (VarName "e", StringVal "Not a part")]
             ]
         )
         ~?= "a,b,c,d\nhello,TRUE,255,FALSE\n"

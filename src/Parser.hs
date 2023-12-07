@@ -74,6 +74,15 @@ instance Alternative Parser where
   (<|>) :: Parser a -> Parser a -> Parser a
   p1 <|> p2 = P $ \s -> doParse p1 s `firstJust` doParse p2 s
 
+instance Monad Parser where
+  return :: a -> Parser a
+  return = pure
+
+  (>>=) :: Parser a -> (a -> Parser b) -> Parser b
+  p1 >>= p2 = P $ \s -> do
+    (c, cs) <- doParse p1 s
+    doParse (p2 c) cs
+
 -- | Combine two Maybe values together, producing the first
 -- successful result
 firstJust :: Maybe a -> Maybe a -> Maybe a
@@ -242,5 +251,9 @@ sepBy p sep = sepBy1 p sep <|> pure []
 --   Returns a list of values returned by @p@.
 sepBy1 :: Parser a -> Parser sep -> Parser [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
+
+sepByCount :: Int -> Parser a -> Parser sep -> Parser [a]
+sepByCount n p sep | n <= 0 = pure []
+sepByCount n p sep = (:) <$> p <*> (sep *> sepByCount (n - 1) p sep)
 
 ---------------------------------------------

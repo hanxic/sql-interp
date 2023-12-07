@@ -121,16 +121,16 @@ stringInP c f = wsP (P.between cP (f $ escape (c ==)) cP)
     cP = P.char c
 
 stringValP :: Parser DValue
-stringValP = StringVal <$> stringInP '\'' many
+stringValP = StringVal <$> stringInP '\"' many
 
 test_stringValP :: Test
 test_stringValP =
   TestList
-    [ P.parse stringValP "\'a\'" ~?= Right (StringVal "a"),
-      P.parse stringValP "\'a\\\'\'" ~?= Right (StringVal "a\\"),
-      P.parse (many stringValP) "\'a\'   \'b\'"
+    [ P.parse stringValP "\"a\"" ~?= Right (StringVal "a"),
+      P.parse stringValP "\"a\\\"\"" ~?= Right (StringVal "a\\"),
+      P.parse (many stringValP) "\"a\"   \"b\""
         ~?= Right [StringVal "a", StringVal "b"],
-      P.parse (many stringValP) "\' a\'   \'b\'"
+      P.parse (many stringValP) "\" a\"   \"b\""
         ~?= Right [StringVal " a", StringVal "b"]
     ]
 
