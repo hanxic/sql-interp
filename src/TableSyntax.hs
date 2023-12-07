@@ -1,10 +1,8 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 
 module TableSyntax where
 
-import Data.Kind
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
 import SQLSyntax
@@ -18,14 +16,17 @@ data Store = Store
 type Scope = Map TableName Table
 
 data Table = Table
-  { indexName :: IndexName,
+  { primaryKeys :: PrimaryKeys,
+    indexName :: IndexName,
     tableData :: TableData
   }
   deriving (Eq, Show)
 
 type TableData = [Row]
 
-type IndexName = NE.NonEmpty (Name, IndexAttribute)
+type IndexName = [(Name, DType)]
+
+type PrimaryKeys = NE.NonEmpty (Name, DType)
 
 data IndexAttribute
   = Regular

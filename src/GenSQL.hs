@@ -279,11 +279,13 @@ instance Arbitrary DeleteCommand where
 
 {- Generate Table -}
 
-instance Arbitrary IndexName where
-  arbitrary = NE.fromList <$> atLeastN 1 ((,) <$> (QC.elements =<< genNamePool) <*> arbitrary)
+genIndexName = QC.sized (`constrainSize1` ((,) <$> (QC.elements =<< genNamePool) <*> (arbitrary :: Gen DType)))
+
+instance Arbitrary PrimaryKeys where
+  arbitrary = undefined
 
 instance Arbitrary Table where
-  arbitrary = Table <$> arbitrary <*> arbitrary
+  arbitrary = Table <$> arbitrary <*> genIndexName <*> arbitrary
 
 instance Arbitrary Store where
   arbitrary = Store <$> arbitrary <*> arbitrary
