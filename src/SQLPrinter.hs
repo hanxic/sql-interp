@@ -141,7 +141,7 @@ isBaseFromExpression _ = False
 
 instance PP Var where
   pp (VarName name) = PP.text name
-  pp (Dot n1 n2) = PP.text n1 <> PP.char '.' <> PP.text n2
+  pp (Dot n v) = pp n <> PP.char '.' <> pp v
 
 getTableName :: FromExpression -> TableName
 getTableName (TableRef tname) = tname
@@ -291,7 +291,7 @@ instance PP AlterTableCommand where
 
 -- TODO: Add nested to make sure not over 80 words
 
-test101 = ColumnAlias (Var (Dot "Table1" "Var4")) "(1j"
+test101 = ColumnAlias (Var (Dot "Table1" (VarName "Var4"))) "(1j"
 
 -- >>> pretty test101
 -- "Table1.Var4 AS (1j"

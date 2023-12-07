@@ -68,12 +68,21 @@ genVarWOAllVar =
       (1, Dot <$> (QC.elements =<< genTablePool) <*> (QC.elements =<< genNamePool))
     ] -}
 
+genVar :: Int -> Gen Var
+genVar n | n <= 0 = VarName <$> (QC.elements =<< genNamePool)
+genVar n =
+  QC.frequency
+    [ (1, VarName <$> (QC.elements =<< genNamePool)),
+      (1, Dot <$> (QC.elements =<< genTablePool) <*> genVar n')
+    ]
+  where
+    n' = n `div` 2
+
 instance Arbitrary Var where
-  arbitrary =
-    QC.frequency
-      [ (1, VarName <$> (QC.elements =<< genNamePool)),
-        (1, Dot <$> (QC.elements =<< genTablePool) <*> (QC.elements =<< genNamePool))
-      ]
+  arbitrary = do
+    n <- QC.sized (\x -> QC.chooseInt (1, x))
+    {- QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)] -}
+    QC.sized genVar
 
 genPos :: Gen Int
 genPos = abs <$> arbitrary `QC.suchThat` (> 0)

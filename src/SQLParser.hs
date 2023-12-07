@@ -265,7 +265,7 @@ nameP = P.filter isValidName (wsP $ some baseP)
 varP :: Parser Var
 varP =
   wsP
-    ( (Dot <$> pFVarName <*> (P.char '.' *> pFVarName))
+    ( (Dot <$> pFVarName <*> (P.char '.' *> varP))
         <|> (VarName <$> pFVarName)
         -- String name for column should be not empty)
     )
@@ -287,7 +287,7 @@ test_varP =
       P.parse varP "st1" ~?= Right (VarName "st1"),
       P.parse varP "\"\"" ~?= errorMsgUnitTest,
       -- TODO: not dealing with "\t" here. Maybe we should?
-      P.parse varP "st.st1" ~?= Right (Dot "st" "st1")
+      P.parse varP "st.st1" ~?= Right (Dot "st" $ VarName "st1")
     ]
 
 expP :: Parser Expression
@@ -450,7 +450,7 @@ test_joinNamesPAux :: Test
 test_joinNamesPAux =
   TestList
     [ P.parse joinNamesPAux " A = B" ~?= Right (VarName "A", VarName "B"),
-      P.parse joinNamesPAux "A.C = B.C" ~?= Right (Dot "A" "C", Dot "B" "C")
+      P.parse joinNamesPAux "A.C = B.C" ~?= Right (Dot "A" $ VarName "C", Dot "B" $ VarName "C")
     ]
 
 -- >>> P.parse joinNamesPAux "A = B"
@@ -468,7 +468,7 @@ test_joinNamesP :: Test
 test_joinNamesP =
   TestList
     [ P.parse joinNamesP "ON A = B, C = D" ~?= Right [(VarName "A", VarName "B"), (VarName "C", VarName "D")],
-      P.parse joinNamesP "ON A.C = B.C, E.F   = G.H" ~?= Right [(Dot "A" "C", Dot "B" "C"), (Dot "E" "F", Dot "G" "H")]
+      P.parse joinNamesP "ON A.C = B.C, E.F   = G.H" ~?= Right [(Dot "A" $ VarName "C", Dot "B" $ VarName "C"), (Dot "E" $ VarName "F", Dot "G" $ VarName "H")]
     ]
 
 data FakeFromExpression
@@ -497,9 +497,9 @@ test_fakeFromExpressionP =
   TestList
     [ P.parse fakeFromExpressionP "A JOIN B" ~?= Right (FakeJoin (Fake "A") InnerJoin (Fake "B")),
       P.parse fakeFromExpressionP "A JOIN B ON X = Y" ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y")])),
-      P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y" ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
-      P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y JOIN C ON Z = W" ~?= Right (FakeJoin (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])) InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])),
-      P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])) [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")])),
+      P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y" ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" $ VarName "X", Dot "B" $ VarName "Y")])),
+      P.parse fakeFromExpressionP "A JOIN B ON X = Y, A.X = B.Y JOIN C ON Z = W" ~?= Right (FakeJoin (FakeJoin (Fake "A") InnerJoin (FakeOn (Fake "B") [(VarName "X", VarName "Y"), (Dot "A" $ VarName "X", Dot "B" $ VarName "Y")])) InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])),
+      P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (Fake "A") InnerJoin (FakeOn (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")])) [(VarName "X", VarName "Y"), (Dot "A" $ VarName "X", Dot "B" $ VarName "Y")])),
       P.parse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W) ON X = Y, A.X = B.Y "
         ~?= Right
           ( FakeJoin
@@ -508,13 +508,13 @@ test_fakeFromExpressionP =
               ( FakeOn
                   (FakeJoin (Fake "B") InnerJoin (FakeOn (Fake "C") [(VarName "Z", VarName "W")]))
                   [ (VarName "X", VarName "Y"),
-                    ( Dot "A" "X",
-                      Dot "B" "Y"
+                    ( Dot "A" $ VarName "X",
+                      Dot "B" $ VarName "Y"
                     )
                   ]
               )
           ),
-      P.parse fakeFromExpressionP "A AS C JOIN B AS D ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (FakeAlias "A" "C") InnerJoin (FakeOn (FakeAlias "B" "D") [(VarName "X", VarName "Y"), (Dot "A" "X", Dot "B" "Y")]))
+      P.parse fakeFromExpressionP "A AS C JOIN B AS D ON X = Y, A.X = B.Y " ~?= Right (FakeJoin (FakeAlias "A" "C") InnerJoin (FakeOn (FakeAlias "B" "D") [(VarName "X", VarName "Y"), (Dot "A" $ VarName "X", Dot "B" $ VarName "Y")]))
     ]
 
 -- >>> P.doParse fakeFromExpressionP "A JOIN (B JOIN C ON Z = W)"
@@ -671,11 +671,11 @@ scP =
 
 test7 =
   SelectCommand
-    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
-      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" "Var2"), (Dot "Table0" "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" "Var3")]) [(Dot "Table0" "Var2", Dot "Table0" "Var2"), (VarName "Var0", VarName "Var3"), (VarName "Var0", VarName "Var0")],
+    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" $ VarName "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
+      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" $ VarName "Var2"), (Dot "Table0" $ VarName "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" $ VarName "Var3")]) [(Dot "Table0" $ VarName "Var2", Dot "Table0" $ VarName "Var2"), (VarName "Var0", VarName "Var3"), (VarName "Var0", VarName "Var0")],
       whSelect = Nothing,
-      groupbySelect = [Dot "Table2" "Var0", Dot "Table1" "Var3", VarName "Var2"],
-      orderbySelect = [(Dot "Table0" "Var0", Nothing, Nothing), (Dot "Table5" "Var0", Just DESC, Just NULLSFIRST), (VarName "Var4", Nothing, Just NULLSFIRST)],
+      groupbySelect = [Dot "Table2" $ VarName "Var0", Dot "Table1" $ VarName "Var3", VarName "Var2"],
+      orderbySelect = [(Dot "Table0" $ VarName "Var0", Nothing, Nothing), (Dot "Table5" $ VarName "Var0", Just DESC, Just NULLSFIRST), (VarName "Var4", Nothing, Just NULLSFIRST)],
       limitSelect = Nothing,
       offsetSelect = Nothing
     }
@@ -691,8 +691,8 @@ test8 = "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT L
 
 test14 =
   SelectCommand
-    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
-      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" "Var2"), (Dot "Table0" "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" "Var3")]) [],
+    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" $ VarName "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
+      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" $ VarName "Var2"), (Dot "Table0" $ VarName "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" $ VarName "Var3")]) [],
       whSelect = Nothing,
       groupbySelect = [],
       orderbySelect = [],

@@ -93,7 +93,7 @@ data Expression
 
 data Var
   = VarName Name
-  | Dot Name Name
+  | Dot Name Var
   deriving (Eq, Show, Ord)
 
 -- data Var
