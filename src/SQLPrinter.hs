@@ -65,6 +65,9 @@ instance PP DValue where
   pp (StringVal s) = PP.text ("\"" <> s <> "\"")
   pp NullVal = PP.text "NULL"
 
+-- >>> pp (StringVal "")
+-- ""
+
 instance PP DType where
   pp (StringType i) = PP.text $ "VARCHAR(" <> show i <> ")"
   pp (IntType i)

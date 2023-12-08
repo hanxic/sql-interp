@@ -5,6 +5,7 @@ import Data.Char qualified as Char
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
+import GenSQL (AnnotatedHeader)
 import SQLPrinter qualified as SPP
 import SQLSyntax
 import TableSyntax
@@ -22,8 +23,11 @@ pretty = render . SPP.pp
 hasWhiteSpace :: String -> Bool
 hasWhiteSpace = foldr ((||) . Char.isSpace) False
 
--- >>> noWhiteSpace "c d"
--- False
+hasComma :: String -> Bool
+hasComma = foldr ((||) . (== ',')) False
+
+-- >>> hasWhiteSpace "c d"
+-- True
 
 ppDVal :: DValue -> Doc
 ppDVal (IntVal i) = SPP.pp i
@@ -31,9 +35,10 @@ ppDVal (BoolVal b) = SPP.pp b
 ppDVal NullVal = PP.text "NULL"
 ppDVal (StringVal s) =
   let ppRegularString = PP.doubleQuotes $ PP.text s
-   in if not $ hasWhiteSpace s && notElem s reservedKeyWords then PP.text s else ppRegularString
+   in if not (null s) && not (hasWhiteSpace s) && not (hasComma s) && notElem s reservedKeyWords then PP.text s else ppRegularString
 
 instance SPP.PP Row where
+  pp :: Row -> Doc
   pp r = PP.cat $ PP.punctuate PP.comma (map (ppDVal . snd) $ Map.toList r)
 
 test_ppRow :: Test
@@ -69,6 +74,15 @@ ppLine d = d <> PP.text "\n"
 
 ppRow :: IndexName -> Row -> Doc
 ppRow iName row = ppLineCSV ppDVal (map (\k -> Map.findWithDefault (StringVal "") (fst k) row) iName)
+
+{-
+ppRow :: AnnotatedHeader -> Row -> Doc
+ppRow [] row = PP.empty
+ppRow [x] row = maybe PP.empty ppDVal (Map.lookup x row)
+ppRow (x : xs) row =
+  case Map.lookup x row of
+    Just dval -> ppDVal <> PP.comma <> ppRow xs row
+    Nothing -> PP.empty-}
 
 ppHeader :: Header -> Doc
 ppHeader = ppLineCSV SPP.pp

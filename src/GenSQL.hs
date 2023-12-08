@@ -69,11 +69,11 @@ genVarWOAllVar =
     ] -}
 
 genVar :: Int -> Gen Var
-genVar n | n <= 0 = VarName <$> (QC.elements =<< genNamePool)
+genVar n | n <= 0 = return $ VarName ("var" ++ show n)
 genVar n =
   QC.frequency
-    [ (1, VarName <$> (QC.elements =<< genNamePool)),
-      (1, Dot <$> (QC.elements =<< genTablePool) <*> genVar n')
+    [ (1, return $ VarName ("var" ++ show n)),
+      (n', Dot ("table" ++ show n) <$> genVar n')
     ]
   where
     n' = n `div` 2
@@ -286,6 +286,17 @@ instance Arbitrary DeleteCommand where
       <$> (QC.elements =<< genTablePool)
       <*> arbitrary
 
+-- ******** Table Generator ********
+
+type AnnotatedHeader = IndexName
+
+genRowFromAH :: AnnotatedHeader -> Gen Row
+genRowFromAH [] = return Map.empty
+genRowFromAH ((var, dtype) : xs) = do
+  dvalue <- genValTC dtype
+  rest <- genRowFromAH xs
+  return (Map.singleton var dvalue `Map.union` rest)
+
 {- Generate Table -}
 genIndexName :: Gen [(Var, DType)]
 genIndexName =
@@ -296,6 +307,17 @@ genIndexName =
             <*> arbitrary
         )
     )
+
+genAH :: Gen AnnotatedHeader
+genAH = reverse <$> QC.sized genAHAux
+  where
+    genAHAux :: Int -> Gen AnnotatedHeader
+    genAHAux n | n <= 0 = (\x y -> [(x, y)]) <$> genVar n <*> arbitrary
+    genAHAux n = do
+      ah' <- genAHAux (n `div` 2)
+      dtype <- arbitrary
+      var <- genVar n
+      return $ (var, dtype) : ah'
 
 instance Arbitrary PrimaryKeys where
   arbitrary = undefined

@@ -34,6 +34,9 @@ prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
 wsP :: Parser a -> Parser a
 wsP p = many P.space *> p <* many P.space
 
+wsbP :: Parser a -> Parser a
+wsbP p = p <* many P.space
+
 test_wsP :: Test
 test_wsP =
   TestList
