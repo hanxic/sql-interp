@@ -166,17 +166,6 @@ test_stringValTP =
 dvalueTP :: Parser DValue
 dvalueTP = (P.intValP <* separatorP) <|> (P.boolValP <* separatorP) <|> nullValTP <|> stringValTP
   where
-    {- case dtype of
-      IntType i -> P.intValP <* separatorP <|> nullValTP
-      BoolType -> P.boolValP <* separatorP <|> nullValTP
-      StringType n -> nullValTP <|> stringValTP -}
-
-    {-     checkBitSize :: Int -> DValue ->  Parser DValue
-        checkBitSize n dvalue@(IntVal i) = if finiteBitSize i > n then P.empty else return dvalue
-        checkBitSize n dvalue@(StringVal s) = if finiteBitSize s > n then P.empty else return dvalue
-        checkBitSize n dvalue@(BoolVal _) = return dvalue -}
-    {- (P.intValP <* separatorP) <|> (P.boolValP <* separatorP) <|> nullValTP <|> stringValTP -}
-
     separatorP = void (P.lookAhead (P.space <|> P.comma)) <|> P.lookAhead P.eof
 
 test_dvalueTP :: Test
@@ -206,22 +195,6 @@ validHeaderPAux pk iName header =
           case lookup headerVar iName of
             Just dtyp2 -> Just (headerVar, dtyp2)
             Nothing -> Nothing
-
-{- let pkVarList = map fst pk in
-   let iNameVarList = map fst iName
-if not $
-  checkRepetitive header
-    && length header == length pkVarList + length iNameVarList
-  then
-    let pHeader = filter (`elem` pkVarList) header
-     in let iHeader = filter (`elem` iNameVarList) $ filter (`notElem` pkVarList) pHeader
-         in if pHeader == pkVarList && iHeader == iNameVarList then return header else empty
-  else empty -}
-
-{-
-What to do:
-If there is a table created that is not
--}
 
 -- | Assume sorted
 checkRepetitive :: (Eq a, Ord a) => [a] -> Bool
@@ -260,8 +233,6 @@ convertMaybe (BoolVal b) (StringType n)
   | n >= 1 =
       Just $ StringVal $ show b
 convertMaybe _ _ = Nothing
-
-test = Char.isSpace
 
 tableP :: Parser Table
 tableP = undefined
