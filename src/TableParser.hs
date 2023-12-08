@@ -41,14 +41,13 @@ prop_roundtrip_row' =
     P.parse (rowP test5) (render $ TP.ppRow test5 row) == Right row
 
 test5 =
-  [ (VarName "var0", IntType 1),
-    (VarName "var1", BoolType),
-    (VarName "var2", IntType 3),
-    (VarName "var5", StringType 81),
-    (Dot "table10" (Dot "table5" (Dot "table2" (VarName "var1"))), BoolType),
-    (Dot "table21" (Dot "table10" (Dot "table5" (VarName "var2"))), BoolType),
-    (Dot "table43" (Dot "table21" (Dot "table10" (Dot "table5" (VarName "var2")))), BoolType),
-    (Dot "table86" (Dot "table43" (Dot "table21" (Dot "table10" (Dot "table5" (VarName "var2"))))), IntType 20)
+  [ (VarName "var0", IntType 3),
+    (VarName "var1", IntType 21),
+    (VarName "var2", BoolType),
+    (Dot "table4" (Dot "table2" (VarName "var1")), BoolType),
+    (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13),
+    (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1),
+    (VarName "var37", BoolType)
   ]
 
 test1 = QC.sample $ genRowFromAH test5
@@ -56,34 +55,44 @@ test1 = QC.sample $ genRowFromAH test5
 test2 =
   fromList
     [ (VarName "var0", IntVal 2),
-      (VarName "var1", BoolVal True),
-      (VarName "var2", NullVal),
-      (VarName "var5", StringVal "0"),
-      (Dot "table10" (Dot "table5" (Dot "table2" (VarName "var1"))), BoolVal True),
-      (Dot "table21" (Dot "table10" (Dot "table5" (VarName "var2"))), BoolVal True),
-      (Dot "table43" (Dot "table21" (Dot "table10" (Dot "table5" (VarName "var2")))), BoolVal True),
-      (Dot "table86" (Dot "table43" (Dot "table21" (Dot "table10" (Dot "table5" (VarName "var2"))))), IntVal 691747)
+      (VarName "var1", IntVal 1986975),
+      (VarName "var2", BoolVal False),
+      (VarName "var37", BoolVal False),
+      (Dot "table18" (Dot "table9" (VarName "var4")), StringVal "2"),
+      (Dot "table4" (Dot "table2" (VarName "var1")), NullVal),
+      (Dot "table9" (Dot "table4" (VarName "var2")), IntVal 4021)
     ]
 
 -- >>> dvalueTypeCheck NullVal BoolType
 -- True
 
 -- >>> TP.ppRow test5 test2
--- 2,TRUE,NULL,0,TRUE,TRUE,TRUE,691747
+-- 2,1986975,FALSE,NULL,4021,2,FALSE
 
-test4 = "NULL,NULL,TRUE,*jlz"
+test4 = "2,1986975,FALSE,NULL,4021,2,FALSE"
 
 test3 = P.doParse (rowP test5) test4
 
 -- >>> test3
--- Just (fromList [(VarName "var0",NullVal),(VarName "var1",NullVal),(VarName "var5",StringVal "*jlz"),(Dot "table2" (VarName "var1"),BoolVal True)],"")
+-- Nothing
 
-test6 = "NULL,NULL,TRUE,*jlz"
+test6 = "2,1986975,FALSE,NULL,4021,2,FALSE"
 
-test7 = P.doParse (rowP [(VarName "var0", BoolType), (VarName "var1", IntType 20), (Dot "table2" (VarName "var1"), BoolType), (VarName "var5", StringType 92)]) test6
+test7 =
+  P.doParse
+    ( rowP
+        [ (VarName "var0", IntType 3),
+          (VarName "var1", IntType 21),
+          (VarName "var2", BoolType),
+          (Dot "table4" (Dot "table2" (VarName "var1")), BoolType),
+          (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13),
+          (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1)
+        ]
+    )
+    test6
 
 -- >>> test7
--- Just (fromList [(VarName "var0",NullVal),(VarName "var1",NullVal),(VarName "var5",StringVal "*jlz"),(Dot "table2" (VarName "var1"),BoolVal True)],"")
+-- Nothing
 
 -- >>> P.doParse (dvalueTP) test6
 -- Just (NullVal,",NULL,*jlz,TRUE")
@@ -166,6 +175,17 @@ test_stringValTP =
 dvalueTP :: Parser DValue
 dvalueTP = (P.intValP <* separatorP) <|> (P.boolValP <* separatorP) <|> nullValTP <|> stringValTP
   where
+    {- case dtype of
+      IntType i -> P.intValP <* separatorP <|> nullValTP
+      BoolType -> P.boolValP <* separatorP <|> nullValTP
+      StringType n -> nullValTP <|> stringValTP -}
+
+    {-     checkBitSize :: Int -> DValue ->  Parser DValue
+        checkBitSize n dvalue@(IntVal i) = if finiteBitSize i > n then P.empty else return dvalue
+        checkBitSize n dvalue@(StringVal s) = if finiteBitSize s > n then P.empty else return dvalue
+        checkBitSize n dvalue@(BoolVal _) = return dvalue -}
+    {- (P.intValP <* separatorP) <|> (P.boolValP <* separatorP) <|> nullValTP <|> stringValTP -}
+
     separatorP = void (P.lookAhead (P.space <|> P.comma)) <|> P.lookAhead P.eof
 
 test_dvalueTP :: Test
@@ -195,6 +215,22 @@ validHeaderPAux pk iName header =
           case lookup headerVar iName of
             Just dtyp2 -> Just (headerVar, dtyp2)
             Nothing -> Nothing
+
+{- let pkVarList = map fst pk in
+   let iNameVarList = map fst iName
+if not $
+  checkRepetitive header
+    && length header == length pkVarList + length iNameVarList
+  then
+    let pHeader = filter (`elem` pkVarList) header
+     in let iHeader = filter (`elem` iNameVarList) $ filter (`notElem` pkVarList) pHeader
+         in if pHeader == pkVarList && iHeader == iNameVarList then return header else empty
+  else empty -}
+
+{-
+What to do:
+If there is a table created that is not
+-}
 
 -- | Assume sorted
 checkRepetitive :: (Eq a, Ord a) => [a] -> Bool
@@ -228,11 +264,13 @@ rowPAux ah row =
         else maybe Control.Applicative.empty (\x -> return $ Map.insert var x row) $ convertMaybe dvalue dtype
 
 convertMaybe :: DValue -> DType -> Maybe DValue
-convertMaybe (IntVal i) (StringType n) | n >= finiteBitSize i = Just $ StringVal $ show i
+convertMaybe (IntVal i) (StringType n) | n >= length (show i) = Just $ StringVal $ show i
 convertMaybe (BoolVal b) (StringType n)
   | n >= 1 =
       Just $ StringVal $ show b
 convertMaybe _ _ = Nothing
+
+test = Char.isSpace
 
 tableP :: Parser Table
 tableP = undefined
