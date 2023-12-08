@@ -319,6 +319,23 @@ genAH = reverse <$> QC.sized genAHAux
       var <- genVar n
       return $ (var, dtype) : ah'
 
+genPKIN :: Gen (PrimaryKeys, IndexName)
+genPKIN = do
+  ah <- genAH
+  i <- QC.chooseInt (1, length ah)
+  let (pkList, iName) = splitAt i ah
+   in return (NE.fromList pkList, iName)
+
+genTableData :: AnnotatedHeader -> Gen TableData
+genTableData ah = QC.sized $ genTableDataAux ah
+  where
+    genTableDataAux :: AnnotatedHeader -> Int -> Gen [Row]
+    genTableDataAux ah n | n <= 0 = return []
+    genTableDataAux ah n = do
+      row <- genRowFromAH ah
+      rest <- genTableDataAux ah (n `div` 2)
+      return $ row : rest
+
 instance Arbitrary PrimaryKeys where
   arbitrary = undefined
 

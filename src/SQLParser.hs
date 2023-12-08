@@ -104,9 +104,9 @@ boolValP :: Parser DValue
 boolValP = trueP <|> falseP
   where
     trueP :: Parser DValue
-    trueP = BoolVal True <$ wsP (P.string "TRUE")
+    trueP = BoolVal True <$ wsP (P.fullString "TRUE")
     falseP :: Parser DValue
-    falseP = BoolVal False <$ wsP (P.string "FALSE")
+    falseP = BoolVal False <$ wsP (P.fullString "FALSE")
 
 -- >>> P.parse (many nullValP) "NULL NULL\n NULL"
 -- Right [NullVal,NullVal,NullVal]

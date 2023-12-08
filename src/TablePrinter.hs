@@ -64,16 +64,16 @@ test_ppPrimaryKeys =
     ]
 
 ppLineCSV :: (a -> Doc) -> [a] -> Doc
-ppLineCSV p xs = PP.cat $ PP.punctuate PP.comma (map p xs)
+ppLineCSV p xs = PP.hcat $ PP.punctuate PP.comma (map p xs)
 
 ppIndexName :: IndexName -> Doc
-ppIndexName = ppLineCSV SPP.pp . map fst
+ppIndexName iName = PP.hcat $ PP.punctuate PP.comma (map (SPP.pp . fst) iName)
 
 ppLine :: Doc -> Doc
 ppLine d = d <> PP.text "\n"
 
 ppRow :: IndexName -> Row -> Doc
-ppRow iName row = ppLineCSV ppDVal (map (\k -> Map.findWithDefault (StringVal "") (fst k) row) iName)
+ppRow iName row = PP.hcat $ PP.punctuate PP.comma (map (\k -> ppDVal $ Map.findWithDefault (StringVal "") (fst k) row) iName)
 
 {-
 ppRow :: AnnotatedHeader -> Row -> Doc
@@ -91,8 +91,10 @@ instance SPP.PP Table where
   pp (Table pk iName td) =
     let indices = NE.toList pk ++ iName
      in ppLine (ppPrimaryKeys pk <> PP.comma <> ppIndexName iName)
-          <> PP.cat
-            (map (ppLine . ppRow indices) td)
+          <> PP.hcat (PP.punctuate (PP.text "\n") (map (ppRow indices) td))
+
+{- PP.cat
+  (map (ppLine . ppRow indices) td) -}
 
 test_ppTable :: Test
 test_ppTable =
@@ -102,8 +104,13 @@ test_ppTable =
             (NE.fromList [(VarName "a", StringType 255), (VarName "b", BoolType)])
             [(VarName "c", IntType 32), (VarName "d", BoolType)]
             [ Map.fromList
+                [(VarName "a", StringVal "hello"), (VarName "b", BoolVal True), (VarName "c", IntVal 255), (VarName "d", BoolVal False), (VarName "e", StringVal "Not a part")],
+              Map.fromList
                 [(VarName "a", StringVal "hello"), (VarName "b", BoolVal True), (VarName "c", IntVal 255), (VarName "d", BoolVal False), (VarName "e", StringVal "Not a part")]
             ]
         )
-        ~?= "a,b,c,d\nhello,TRUE,255,FALSE\n"
+        ~?= "a,b,c,d\nhello,TRUE,255,FALSE\nhello,TRUE,255,FALSE\n"
     ]
+
+-- >>> runTestTT test_ppTable
+-- Counts {cases = 1, tried = 1, errors = 0, failures = 0}
