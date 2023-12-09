@@ -104,9 +104,9 @@ boolValP :: Parser DValue
 boolValP = trueP <|> falseP
   where
     trueP :: Parser DValue
-    trueP = BoolVal True <$ wsP (P.fullString "TRUE")
+    trueP = BoolVal True <$ wsP (P.string "TRUE")
     falseP :: Parser DValue
-    falseP = BoolVal False <$ wsP (P.fullString "FALSE")
+    falseP = BoolVal False <$ wsP (P.string "FALSE")
 
 -- >>> P.parse (many nullValP) "NULL NULL\n NULL"
 -- Right [NullVal,NullVal,NullVal]
@@ -119,12 +119,12 @@ escape :: (Char -> Bool) -> Parser Char
 escape f = P.satisfy (not . f)
 
 stringInP :: Char -> (Parser Char -> Parser String) -> Parser String
-stringInP c f = wsP (P.between cP (f $ escape (c ==)) cP)
+stringInP c f = P.between cP (f $ escape (c ==)) cP
   where
     cP = P.char c
 
 stringValP :: Parser DValue
-stringValP = StringVal <$> stringInP '\"' many
+stringValP = StringVal <$> wsP (stringInP '\"' many)
 
 test_stringValP :: Test
 test_stringValP =

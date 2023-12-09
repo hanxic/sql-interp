@@ -90,7 +90,7 @@ ppHeader = ppLineCSV SPP.pp
 instance SPP.PP Table where
   pp (Table pk iName td) =
     let indices = NE.toList pk ++ iName
-     in ppLine (ppPrimaryKeys pk <> PP.comma <> ppIndexName iName)
+     in ppLine (ppPrimaryKeys pk <> if null iName then PP.empty else PP.comma <> ppIndexName iName)
           <> PP.hcat (PP.punctuate (PP.text "\n") (map (ppRow indices) td))
 
 {- PP.cat

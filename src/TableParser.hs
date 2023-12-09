@@ -59,39 +59,31 @@ prop_roundtrip_table' =
                 let table = Table pk iName td
                  in P.parse (tableP pk iName) (TP.pretty table) == Right table
 
-test101 =
-  [fromList [(VarName "var0", IntVal 8), (VarName "var1", IntVal 34175), (VarName "var2", BoolVal False), (VarName "var37", BoolVal True), (Dot "table18" (Dot "table9" (VarName "var4")), StringVal ""), (Dot "table4" (Dot "table2" (VarName "var1")), NullVal), (Dot "table9" (Dot "table4" (VarName "var2")), NullVal)], fromList [(VarName "var0", IntVal 8), (VarName "var1", NullVal), (VarName "var2", NullVal), (VarName "var37", NullVal), (Dot "table18" (Dot "table9" (VarName "var4")), NullVal), (Dot "table4" (Dot "table2" (VarName "var1")), BoolVal False), (Dot "table9" (Dot "table4" (VarName "var2")), IntVal 4613)]]
+test801 = NE.fromList [(VarName "var0", StringType 11), (VarName "var1", BoolType), (VarName "var2", StringType 102)]
 
-tempTable = Table test998 test997 test101
+test802 = []
 
--- >>> TP.pretty tempTable
--- "var0,var1,var2,table4.table2.var1,table9.table4.var2,table18.table9.var4,var37\n8,34175,FALSE,NULL,NULL,\"\",TRUE\n8,NULL,NULL,FALSE,4613,NULL,NULL"
+test803 = [fromList [(VarName "var0", NullVal), (VarName "var1", BoolVal True), (VarName "var2", StringVal "")], fromList [(VarName "var0", NullVal), (VarName "var1", NullVal), (VarName "var2", StringVal "")]]
 
-test103 = "var0,var1,var2,table4.table2.var1,table9.table4.var2,table18.table9.var4,var37\n8,34175,FALSE,NULL,NULL,\"\",TRUE\n8,NULL,NULL,FALSE,4613,NULL,NULL"
+test1004 = Table test801 test802 test803
 
-test102 = P.doParse (tableP test998 test997) test103
+-- >>> TP.pretty test1004
+-- "var0,var1,var2\nNULL,TRUE,\"\"\nNULL,NULL,\"\""
 
--- >>> test102
--- Just (Table {primaryKeys = (VarName "var0",IntType 3) :| [], indexName = [(VarName "var1",IntType 21),(VarName "var2",BoolType),(Dot "table4" (Dot "table2" (VarName "var1")),BoolType),(Dot "table9" (Dot "table4" (VarName "var2")),IntType 13),(Dot "table18" (Dot "table9" (VarName "var4")),StringType 1),(VarName "var37",BoolType)], tableData = [fromList [(VarName "var0",IntVal 8),(VarName "var1",IntVal 34175),(VarName "var2",BoolVal False),(VarName "var37",BoolVal True),(Dot "table18" (Dot "table9" (VarName "var4")),StringVal ""),(Dot "table4" (Dot "table2" (VarName "var1")),NullVal),(Dot "table9" (Dot "table4" (VarName "var2")),NullVal)],fromList [(VarName "var0",IntVal 8),(VarName "var1",NullVal),(VarName "var2",NullVal),(VarName "var37",NullVal),(Dot "table18" (Dot "table9" (VarName "var4")),NullVal),(Dot "table4" (Dot "table2" (VarName "var1")),BoolVal False),(Dot "table9" (Dot "table4" (VarName "var2")),IntVal 4613)]]},"")
+test1005 = "var0,var1,var2\nNULL,TRUE,\"\"\nNULL,NULL,\"\""
 
-returnTable =
-  Table
-    { primaryKeys = (VarName "var0", IntType 3) NE.:| [],
-      indexName = [(VarName "var1", IntType 21), (VarName "var2", BoolType), (Dot "table4" (Dot "table2" (VarName "var1")), BoolType), (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13), (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1), (VarName "var37", BoolType)],
-      tableData = [fromList [(VarName "var0", IntVal 4), (VarName "var1", IntVal 525969), (VarName "var2", BoolVal False), (VarName "var37", NullVal), (Dot "table18" (Dot "table9" (VarName "var4")), StringVal "/"), (Dot "table4" (Dot "table2" (VarName "var1")), NullVal), (Dot "table9" (Dot "table4" (VarName "var2")), IntVal 2977)]]
-    }
+test1006 = P.doParse (tableP test801 test802) test1005
 
-test10001 = [(VarName "var1", IntType 21), (VarName "var2", BoolType), (Dot "table4" (Dot "table2" (VarName "var1")), BoolType), (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13), (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1), (VarName "var37", BoolType)]
+-- >>> test1006
+-- Nothing
 
--- >>> TP.ppIndexName test10001
--- var1,var2,table4.table2.var1,table9.table4.var2,table18.table9.var4,var37
+test1007 = P.doParse (validHeaderP test801 test802) test1005
 
-test104 = "6,738370,NULL,NULL,NULL,NULL,NULL\nNULL,320619,TRUE,TRUE,NULL,\"\",FALSE\nNULL,NULL,FALSE,FALSE,7916,J,TRUE"
-
-test105 = P.doParse (many (rowP test5)) test104
+-- >>> test1007
+-- Just ([(VarName "var0",StringType 11),(VarName "var1",BoolType),(VarName "var2",StringType 102)],"NULL,TRUE,\"\"\nNULL,NULL,\"\"")
 
 -- >>> test105
--- Just ([fromList [(VarName "var0",IntVal 6),(VarName "var1",IntVal 738370),(VarName "var2",NullVal),(VarName "var37",NullVal),(Dot "table18" (Dot "table9" (VarName "var4")),NullVal),(Dot "table4" (Dot "table2" (VarName "var1")),NullVal),(Dot "table9" (Dot "table4" (VarName "var2")),NullVal)],fromList [(VarName "var0",NullVal),(VarName "var1",IntVal 320619),(VarName "var2",BoolVal True),(VarName "var37",BoolVal False),(Dot "table18" (Dot "table9" (VarName "var4")),StringVal ""),(Dot "table4" (Dot "table2" (VarName "var1")),BoolVal True),(Dot "table9" (Dot "table4" (VarName "var2")),NullVal)],fromList [(VarName "var0",NullVal),(VarName "var1",NullVal),(VarName "var2",BoolVal False),(VarName "var37",BoolVal True),(Dot "table18" (Dot "table9" (VarName "var4")),StringVal "J"),(Dot "table4" (Dot "table2" (VarName "var1")),BoolVal False),(Dot "table9" (Dot "table4" (VarName "var2")),IntVal 7916)]],"")
+-- Nothing
 
 test5 =
   [ (VarName "var0", IntType 3),
@@ -103,37 +95,39 @@ test5 =
     (VarName "var37", BoolType)
   ]
 
-test108 = P.doParse (rowP test5) "6,602402,FALSE,FALSE,7959,\"\",TRUE\n"
+test788 =
+  [(VarName "var0", StringType 11), (VarName "var1", BoolType), (VarName "var2", StringType 102)]
 
--- >>> test108
--- Just (fromList [(VarName "var0",IntVal 6),(VarName "var1",IntVal 602402),(VarName "var2",BoolVal False),(VarName "var37",BoolVal True),(Dot "table18" (Dot "table9" (VarName "var4")),StringVal ""),(Dot "table4" (Dot "table2" (VarName "var1")),BoolVal False),(Dot "table9" (Dot "table4" (VarName "var2")),IntVal 7959)],"\n")
+test789 :: Map Var DValue
+test789 = fromList [(VarName "var0", NullVal), (VarName "var1", IntVal 43)]
 
--- >>> test105
--- Just (fromList [(VarName "var0",IntVal 6),(VarName "var1",IntVal 602402),(VarName "var2",BoolVal False),(VarName "var37",BoolVal True),(Dot "table18" (Dot "table9" (VarName "var4")),StringVal ""),(Dot "table4" (Dot "table2" (VarName "var1")),BoolVal False),(Dot "table9" (Dot "table4" (VarName "var2")),IntVal 7959)],"\n")
+-- >>> render $ TP.ppRow test788 test789
+-- "NULL,43"
 
-test106 = P.doParse (P.boolValP) "TRUE\n1"
+test790 = "NULL,TRUE,\"\"\nNULL,NULL,\"\""
 
-test107 = P.doParse (separatorP) "\n1"
+test107 = P.doParse (rowP test788) test790
 
 -- >>> test107
--- Just ((),"\n1")
+-- Nothing
 
--- >>> test106
--- Just (BoolVal True,"1")
+test791 :: [(Var, DType)]
+test791 = [(VarName "var0", StringType 11), (VarName "var1", BoolType), (VarName "var2", StringType 102)]
+
+test792 = "NULL,TRUE,\"\"\n"
+
+test793 = P.doParse (rowP test791) test792
+
+-- >>> test793
+-- Just (fromList [(VarName "var0",NullVal),(VarName "var1",BoolVal True),(VarName "var2",StringVal "")],"")
 
 test998 =
   NE.fromList
-    [ (VarName "var0", IntType 3)
+    [ (VarName "var0", BoolType)
     ]
 
 test997 =
-  [ (VarName "var1", IntType 21),
-    (VarName "var2", BoolType),
-    (Dot "table4" (Dot "table2" (VarName "var1")), BoolType),
-    (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13),
-    (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1),
-    (VarName "var37", BoolType)
-  ]
+  []
 
 test999 = QC.sample $ genTableData test5
 
@@ -229,7 +223,7 @@ newLineP = P.char '\n' <|> P.char '\r' <|> P.char '\f'
 
 nullValTP :: Parser DValue
 nullValTP =
-  SP.nullValP
+  NullVal <$ (P.string "NULL" <* P.lookAhead (spacesP *> (P.eof <|> void (newLineP <|> P.comma))))
     <|> NullVal <$ P.lookAhead (SP.wsP P.comma <|> spacesP *> P.wsbP newLineP)
     <|> NullVal <$ P.lookAhead (spacesP *> P.wsbP P.eof)
 
@@ -242,34 +236,45 @@ nullValTP =
 test_nullValTP :: Test
 test_nullValTP =
   TestList
-    [ P.parse nullValTP "," ~?= Right NullVal,
-      P.parse nullValTP "NULL" ~?= Right NullVal,
+    [ P.doParse nullValTP "," ~?= Just (NullVal, ","),
+      P.doParse nullValTP "NULL\n" ~?= Just (NullVal, "\n"),
       P.parse nullValTP "\t\n" ~?= Right NullVal,
       P.parse nullValTP "Something" ~?= SP.errorMsgUnitTest
     ]
 
 stringValTP :: Parser DValue
 stringValTP =
-  SP.stringValP
-    <|> ( StringVal
-            <$> some (P.satisfy (\x -> x /= ',' && not (Char.isSpace x)))
-        )
+  ( StringVal <$> (SP.stringInP '\"' many <* spacesP)
+      <|> ( StringVal
+              <$> some (P.satisfy (\x -> x /= ',' && not (Char.isSpace x)))
+          )
+  )
+    <* spacesP
 
 test_stringValTP :: Test
 test_stringValTP =
   TestList
     [ P.parse stringValTP "    ," ~?= SP.errorMsgUnitTest,
-      P.parse stringValTP "this," ~?= Right (StringVal "this"),
+      P.doParse stringValTP "this   ," ~?= Just (StringVal "this", ","),
       P.parse stringValTP "\"Ha , Ha\"" ~?= Right (StringVal "Ha , Ha")
     ]
 
 boolValTP :: Parser DValue
-boolValTP = trueP <|> falseP
+boolValTP = (trueP <|> falseP) <* spacesP
   where
     trueP :: Parser DValue
     trueP = BoolVal True <$ P.string "TRUE"
     falseP :: Parser DValue
     falseP = BoolVal False <$ P.string "FALSE"
+
+test_boolValTP :: Test
+test_boolValTP =
+  TestList
+    [ P.doParse boolValTP "TRUE    " ~?= Just (BoolVal True, ""),
+      P.doParse boolValTP "FALSE    " ~?= Just (BoolVal False, ""),
+      P.doParse boolValTP "TRUE   , " ~?= Just (BoolVal True, ", "),
+      P.doParse boolValTP "TRUE   \n " ~?= Just (BoolVal True, "\n ")
+    ]
 
 intValTP :: Parser DValue
 intValTP = IntVal <$> P.int
@@ -348,13 +353,14 @@ checkRepetitive xs =
       x1 == x2 || checkRepetitiveAux (x2 : xs)
 
 rowP :: AnnotatedHeader -> Parser Row
-rowP = flip rowPAux Map.empty
+rowP ah = rowPAux ah Map.empty
 
+-- How to distinguish a NULL value or the end of file
 rowPAux :: AnnotatedHeader -> Row -> Parser Row
 rowPAux ah row =
   case ah of
     [] -> row <$ some spacesP
-    [x@(_, dtype)] -> validValP x row =<< (dvalueTP <* spacesP)
+    [x@(_, dtype)] -> validValP x row =<< (dvalueTP <* spacesP <* P.lookAhead (void newLineP <|> P.eof))
     (x@(_, dtype) : xs) -> do
       dvalue <- dvalueTP <* SP.wsP P.comma
       row' <- validValP x row dvalue
@@ -378,5 +384,5 @@ test = Char.isSpace
 tableP :: PrimaryKeys -> IndexName -> Parser Table
 tableP pk iName = do
   ah <- validHeaderP pk iName
-  tableData <- many (SP.wsbP (rowP ah))
+  tableData <- ([] <$ (many P.space *> P.eof)) <|> P.sepBy (rowP ah <* spacesP) newLineP
   return (Table pk iName tableData)
