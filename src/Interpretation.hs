@@ -12,9 +12,22 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
 import Data.Set as Set
 import GenSQL qualified as GSQL
-import SQLPrinter qualified as SQLP
+import Parser qualified as PAR
+import SQLParser qualified as SPAR
+import SQLPrinter qualified as SP
 import SQLSyntax
+import TableParser qualified as TPAR
+import TablePrinter qualified as TP
 import TableSyntax
+  ( ErrorMsg,
+    IndexName,
+    PrimaryKeys,
+    Row,
+    Scope,
+    Store (..),
+    Table (..),
+    TableData,
+  )
 import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
@@ -122,7 +135,7 @@ evalFrom fe@(TableAlias tn1 tn2) = do
   case mt of
     Just tnTable ->
       setAlias tn1 tn2 >> return tnTable
-    _ -> throwError $ "No Table for table alias: " ++ SQLP.pretty fe
+    _ -> throwError $ "No Table for table alias: " ++ SP.pretty fe
 evalFrom (Join fe1 js fe2 jns) = do
   tnTable1 <- evalFrom fe1
   tnTable2 <- evalFrom fe2
@@ -228,7 +241,7 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
     throwAliases :: Var -> Var -> SQLI (Row -> Row -> Bool)
     throwAliases var1 var2 = do
       {- aliasStr <- printAlias -}
-      throwError $ "undefined join names: left is " ++ SQLP.pretty var1 ++ " right is " ++ SQLP.pretty var2
+      throwError $ "undefined join names: left is " ++ SP.pretty var1 ++ " right is " ++ SP.pretty var2
     getJoinSpecAux :: TableName -> TableName -> (Row -> Row -> Bool) -> (Var, Var) -> SQLI (Row -> Row -> Bool)
     getJoinSpecAux tn1 tn2 f (var1, var2) = do
       (alias1, jo1) <- case var1 of
@@ -296,6 +309,32 @@ emptyTable =
 
 emptyRow :: Row
 emptyRow = Map.empty
+
+tableSampleGradesTXT = "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,Math,92\n2,English,88\n2,History,76\n3,Math,78\n3,English,95\n3,History,84\n4,Math,90\n4,English,85\n4,History,88\n5,Math,86\n5,English,92\n5,History,80"
+
+tableSampleGradesPK = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)]
+
+tableSampleGradesIN = [(VarName "grade", IntType 32)]
+
+tableSampleGrades = case PAR.parse (TPAR.tableP tableSampleGradesPK tableSampleGradesIN) tableSampleGradesTXT of
+  Right x -> x
+  Left x -> Table tableSampleGradesPK tableSampleGradesIN []
+
+-- >>> TP.pretty tableSampleGrades
+-- "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,Math,92\n2,English,88\n2,History,76\n3,Math,78\n3,English,95\n3,History,84\n4,Math,90\n4,English,85\n4,History,88\n5,Math,86\n5,English,92\n5,History,80"
+
+tableSampleStudentsTXT = "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
+
+tableSampleStudentsPK = NE.fromList [(VarName "student_id", IntType 32)]
+
+tableSampleStudentsIN = [(VarName "first_name", StringType 255), (VarName "last_name", StringType 255), (VarName "gender", StringType 255), (VarName "age", IntType 32)]
+
+tableSampleStudents = case PAR.parse (TPAR.tableP tableSampleStudentsPK tableSampleStudentsIN) tableSampleStudentsTXT of
+  Right x -> x
+  Left x -> Table tableSampleStudentsPK tableSampleStudentsIN []
+
+-- >>> TP.pretty tableSampleStudents
+-- "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
 
 -- Helper functions
 tableFMap :: (Row -> Row) -> Table -> Table
