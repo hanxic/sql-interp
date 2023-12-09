@@ -35,12 +35,6 @@ prop_roundtrip_row = QC.forAll genAH $ \ah ->
   QC.forAll (genRowFromAH ah) $ \row ->
     P.parse (rowP ah) (render $ TP.ppRow ah row) == Right row
 
-prop_roundtrip_row' :: QC.Property
-prop_roundtrip_row' =
-  QC.forAll (genRowFromAH test5) $ \row ->
-    P.parse (rowP test5) (render $ TP.ppRow test5 row) == Right row
-
--- TODO:
 prop_roundtrip_table :: QC.Property
 prop_roundtrip_table = QC.forAll genPKIN $ \(pk, iName) ->
   let ah = NE.toList pk ++ iName
@@ -49,137 +43,6 @@ prop_roundtrip_table = QC.forAll genPKIN $ \(pk, iName) ->
          in P.parse (tableP pk iName) (TP.pretty table) == Right table
 
 {- P.parse tableP (TP.pretty t) == Right t -}
-
-prop_roundtrip_table' :: QC.Property
-prop_roundtrip_table' =
-  let pk = test998
-   in let iName = test997
-       in let ah = NE.toList pk ++ iName
-           in QC.forAll (genTableData ah) $ \td ->
-                let table = Table pk iName td
-                 in P.parse (tableP pk iName) (TP.pretty table) == Right table
-
-test801 = NE.fromList [(VarName "var0", StringType 11), (VarName "var1", BoolType), (VarName "var2", StringType 102)]
-
-test802 = []
-
-test803 = [fromList [(VarName "var0", NullVal), (VarName "var1", BoolVal True), (VarName "var2", StringVal "")], fromList [(VarName "var0", NullVal), (VarName "var1", NullVal), (VarName "var2", StringVal "")]]
-
-test1004 = Table test801 test802 test803
-
--- >>> TP.pretty test1004
--- "var0,var1,var2\nNULL,TRUE,\"\"\nNULL,NULL,\"\""
-
-test1005 = "var0,var1,var2\nNULL,TRUE,\"\"\nNULL,NULL,\"\""
-
-test1006 = P.doParse (tableP test801 test802) test1005
-
--- >>> test1006
--- Nothing
-
-test1007 = P.doParse (validHeaderP test801 test802) test1005
-
--- >>> test1007
--- Just ([(VarName "var0",StringType 11),(VarName "var1",BoolType),(VarName "var2",StringType 102)],"NULL,TRUE,\"\"\nNULL,NULL,\"\"")
-
--- >>> test105
--- Nothing
-
-test5 =
-  [ (VarName "var0", IntType 3),
-    (VarName "var1", IntType 21),
-    (VarName "var2", BoolType),
-    (Dot "table4" (Dot "table2" (VarName "var1")), BoolType),
-    (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13),
-    (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1),
-    (VarName "var37", BoolType)
-  ]
-
-test788 =
-  [(VarName "var0", StringType 11), (VarName "var1", BoolType), (VarName "var2", StringType 102)]
-
-test789 :: Map Var DValue
-test789 = fromList [(VarName "var0", NullVal), (VarName "var1", IntVal 43)]
-
--- >>> render $ TP.ppRow test788 test789
--- "NULL,43"
-
-test790 = "NULL,TRUE,\"\"\nNULL,NULL,\"\""
-
-test107 = P.doParse (rowP test788) test790
-
--- >>> test107
--- Nothing
-
-test791 :: [(Var, DType)]
-test791 = [(VarName "var0", StringType 11), (VarName "var1", BoolType), (VarName "var2", StringType 102)]
-
-test792 = "NULL,TRUE,\"\"\n"
-
-test793 = P.doParse (rowP test791) test792
-
--- >>> test793
--- Just (fromList [(VarName "var0",NullVal),(VarName "var1",BoolVal True),(VarName "var2",StringVal "")],"")
-
-test998 =
-  NE.fromList
-    [ (VarName "var0", BoolType)
-    ]
-
-test997 =
-  []
-
-test999 = QC.sample $ genTableData test5
-
-test1 = QC.sample $ genRowFromAH test5
-
-test2 =
-  fromList
-    [ (VarName "var0", IntVal 2),
-      (VarName "var1", IntVal 1986975),
-      (VarName "var2", BoolVal False),
-      (VarName "var37", BoolVal False),
-      (Dot "table18" (Dot "table9" (VarName "var4")), StringVal "2"),
-      (Dot "table4" (Dot "table2" (VarName "var1")), NullVal),
-      (Dot "table9" (Dot "table4" (VarName "var2")), IntVal 4021)
-    ]
-
--- >>> dvalueTypeCheck NullVal BoolType
--- True
-
--- >>> TP.ppRow test5 test2
--- 2,1986975,FALSE,NULL,4021,2,FALSE
-
-test4 = "2,1986975,FALSE,NULL,4021,2,FALSE"
-
-test3 = P.doParse (rowP test5) test4
-
--- >>> test3
--- Nothing
-
-test6 = "2,1986975,FALSE,NULL,4021,2,FALSE"
-
-test7 =
-  P.doParse
-    ( rowP
-        [ (VarName "var0", IntType 3),
-          (VarName "var1", IntType 21),
-          (VarName "var2", BoolType),
-          (Dot "table4" (Dot "table2" (VarName "var1")), BoolType),
-          (Dot "table9" (Dot "table4" (VarName "var2")), IntType 13),
-          (Dot "table18" (Dot "table9" (VarName "var4")), StringType 1)
-        ]
-    )
-    test6
-
--- >>> test7
--- Just (fromList [(VarName "var0",IntVal 2),(VarName "var1",IntVal 1986975),(VarName "var2",BoolVal False),(Dot "table18" (Dot "table9" (VarName "var4")),StringVal "2"),(Dot "table4" (Dot "table2" (VarName "var1")),NullVal),(Dot "table9" (Dot "table4" (VarName "var2")),IntVal 4021)],",FALSE")
-
--- >>> P.doParse (dvalueTP) test6
--- Just (NullVal,",NULL,*jlz,TRUE")
-
--- >>> P.doParse (dvalueTP) test4
--- Just (IntVal 55,",105732,TRUE")
 
 type PrimaryKeysList = IndexName
 
@@ -386,3 +249,25 @@ tableP pk iName = do
   ah <- validHeaderP pk iName
   tableData <- ([] <$ (many P.space *> P.eof)) <|> P.sepBy (rowP ah <* spacesP) newLineP
   return (Table pk iName tableData)
+
+test_all :: IO Counts
+test_all =
+  runTestTT $
+    TestList
+      [ test_headerP,
+        test_nullValTP,
+        test_stringValTP,
+        test_boolValTP,
+        test_dvalueTP
+      ]
+
+qc :: IO ()
+qc = do
+  putStrLn "roundtrip_header"
+  QC.quickCheck prop_roundtrip_header
+  putStrLn "roundtrip_valT"
+  QC.quickCheck prop_roundtrip_valT
+  putStrLn "roundtrip_row"
+  QC.quickCheck prop_roundtrip_row
+  putStrLn "roundtrip_table"
+  QC.quickCheck prop_roundtrip_table
