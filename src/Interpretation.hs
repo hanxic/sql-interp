@@ -6,7 +6,11 @@ import Control.Monad
 import Control.Monad.Except (Except, ExceptT, runExceptT, throwError)
 import Control.Monad.State (State, get, put, runState)
 import Control.Monad.State qualified as S
+{- import Data.Bits (Bits (bitSize), FiniteBits (finiteBitSize)) -}
+
+import Data.Char (toLower, toUpper)
 import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
@@ -32,8 +36,9 @@ import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
 import Text.Printf (FieldFormat (FieldFormat))
-import Text.RE.TDFA.String
 import Text.Read (readMaybe)
+import Text.Regex.Base qualified as REGEX
+import Text.Regex.Posix qualified as POSIX ((=~))
 
 {- import Test.QuickCheck.Monadic qualified as QCM -}
 
@@ -287,10 +292,54 @@ evalWhere (Just expr) (tn, table) = do
   return (tn, Table (primaryKeys table) (indexName table) newTD)
 
 evalWhereExpr :: Expression -> TableData -> SQLI TableData
-evalWhereExpr expr td = undefined
+evalWhereExpr expr td = do
+  exprNorm <- evalEAgg expr td
+  undefined
 
 {-   return $
     List.foldr (\x acc -> maybe [] (: acc) (evalE expr x)) [] td -}
+
+evalEAgg :: Expression -> TableData -> SQLI Expression
+evalEAgg v@(Var _) td = return v
+evalEAgg v@(Val _) td = return v
+evalEAgg (Op1 uop expr) td = Op1 uop <$> evalEAgg expr td
+evalEAgg (Op2 expr1 bop expr2) td = do
+  expr1' <- evalEAgg expr1 td
+  expr2' <- evalEAgg expr2 td
+  return $ Op2 expr1' bop expr2'
+evalEAgg (Fun fun expr) td = do
+  expr' <- evalEAgg expr td
+  return $ Fun fun expr'
+evalEAgg (AggFun aggfun cs expr) td = do
+  expr' <- evalEAgg expr td
+  Val <$> evalEAggAux aggfun cs expr' td
+  where
+    evalEAggAux :: AggFunction -> CountStyle -> Expression -> TableData -> SQLI DValue
+    evalEAggAux Sum _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc >>= (\i2 -> return $ IntVal (i1 + i2)))) (IntVal 0) td
+    evalEAggAux Count _ expr td = foldM (\acc r -> evalE expr r >>= (\x -> getInt acc >>= (\i -> return $ IntVal $ if x /= NullVal then i + 1 else i))) (IntVal 0) td
+    -- Count non-bool expression not supported / may generate undefined behavior
+    evalEAggAux Max _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc Data.Functor.<&> (IntVal . max i1))) (IntVal 0) td
+    evalEAggAux Min _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc Data.Functor.<&> (IntVal . min i1))) (IntVal 0) td
+    evalEAggAux Avg cs expr td = do
+      s <- evalEAggAux Sum cs expr td
+      c <- evalEAggAux Count cs expr td
+      case (s, c) of
+        (IntVal numerator, IntVal denomenator) -> if denomenator == 0 then return $ IntVal 0 else return $ IntVal $ numerator `div` denomenator
+        (_, _) -> throwError "AggFunction Type error in Avg"
+
+-- first do a regularization in expr -> make sure its Aggfunction free
+-- Map each row into some DValue
+-- Then Aggregate
+
+getInt :: DValue -> SQLI Int
+getInt (IntVal i) = return i
+getInt b@(BoolVal _) = getInt =<< weakCast b (IntType 32)
+getInt v = throwCastError v (IntType 32)
+
+getBool :: DValue -> SQLI Bool
+getBool (BoolVal b) = return b
+getBool ival@(IntVal _) = getBool =<< weakCast ival BoolType
+getBool v = throwCastError v BoolType
 
 evalE :: Expression -> Row -> SQLI DValue
 evalE (Var v) r =
@@ -301,10 +350,10 @@ evalE (Val v) r = return v
 evalE (Op2 e1 o e2) r = do
   dval1 <- evalE e1 r
   dval2 <- evalE e2 r
-  evalOp2 o dval1 dval2
+  evalOp2Robust o dval1 dval2
 {- evalOp2 o <*> evalE e1 r <*> evalE e2 r -}
 evalE (Op1 o e1) r = evalOp1 o =<< evalE e1 r
-evalE (Fun f e) r = evalFun f <$> evalE e r
+evalE (Fun f e) r = evalFun f =<< evalE e r
 evalE e r = throwError $ "Illegal expression: " ++ TP.pretty e
 
 evalOp2 :: Bop -> DValue -> DValue -> SQLI DValue
@@ -322,14 +371,60 @@ evalOp2 Lt val1 val2 = return $ BoolVal $ val1 < val2
 evalOp2 Le val1 val2 = return $ BoolVal $ val1 <= val2
 evalOp2 And (BoolVal b1) (BoolVal b2) = return $ BoolVal $ b1 && b2
 evalOp2 Or (BoolVal b1) (BoolVal b2) = return $ BoolVal $ b1 || b2
-evalOp2 Like (StringVal str1) (StringVal str2) = undefined
-evalOp2 bop dval1 dval2 = throwError $ "Illegal Op2: " ++ TP.pretty (Op2 (Val dval1) bop (Val dval2))
+evalOp2 Like (StringVal str1) (StringVal str2) = return $ BoolVal $ str1 POSIX.=~ str2
+evalOp2 Is val1 val2 = evalOp2 Eq val1 val2
+evalOp2 bop NullVal _ = return NullVal -- If either is NULL, return NULL
+evalOp2 bop _ NullVal = return NullVal
+evalOp2 bop dval1 dval2 =
+  throwExpressionError (Op2 (Val dval1) bop (Val dval2))
+
+evalOp2Robust :: Bop -> DValue -> DValue -> SQLI DValue
+evalOp2Robust bop dval1 dval2 =
+  if level bop >= 17
+    then
+      weakCast dval1 (IntType 64)
+        >>= (\c1 -> weakCast dval2 (IntType 64) >>= evalOp2 bop c1)
+    else evalOp2 bop dval1 dval2
+
+weakCast :: DValue -> DType -> SQLI DValue
+weakCast bval@(BoolVal _) BoolType = return bval
+weakCast (BoolVal b) (IntType n) = return $ IntVal $ if b then 1 else 0
+weakCast ival@(IntVal i) (IntType n) = return ival
+weakCast (IntVal i) BoolType = return $ BoolVal $ i == 1
+weakCast sval@(StringVal _) (StringType n) = return sval
+weakCast NullVal _ = return NullVal
+weakCast dval dtyp = throwCastError dval dtyp
+
+test_weakCast :: Test
+test_weakCast =
+  TestList
+    [ interp (weakCast (IntVal 0) (IntType 1)) sampleStore ~?= Right (IntVal 0),
+      interp (weakCast (IntVal 8) (IntType 4)) sampleStore ~?= Right (IntVal 8),
+      interp (weakCast (BoolVal True) (IntType 3)) sampleStore ~?= Right (IntVal 1),
+      interp (weakCast (StringVal "bbb") (IntType 3)) sampleStore ~?= interp (throwCastError (StringVal "bbb") (IntType 3)) sampleStore
+    ]
 
 evalOp1 :: Uop -> DValue -> SQLI DValue
-evalOp1 = undefined
+evalOp1 Neg (IntVal i) = return $ IntVal (-i)
+evalOp1 Neg bval@(BoolVal _) = weakCast bval (IntType 1) >>= evalOp1 Neg
+evalOp1 Not (BoolVal b) = return $ BoolVal (not b)
+evalOp1 Not ival@(IntVal _) = weakCast ival BoolType >>= evalOp1 Not
+evalOp1 uop dval = throwExpressionError $ Op1 uop (Val dval)
 
-evalFun :: Function -> DValue -> DValue
-evalFun = undefined
+evalFun :: Function -> DValue -> SQLI DValue
+evalFun Len (StringVal str) = return $ IntVal $ length str
+evalFun Lower (StringVal str) = return $ StringVal $ List.map toLower str
+evalFun Upper (StringVal str) = return $ StringVal $ List.map toUpper str
+evalFun _ NullVal = return NullVal
+evalFun fun dval = throwExpressionError (Fun fun (Val dval))
+
+-- ******** Throw Errors ********
+
+throwExpressionError :: Expression -> SQLI a
+throwExpressionError expr = throwError $ "Illegal Op2: " ++ TP.pretty expr
+
+throwCastError :: DValue -> DType -> SQLI a
+throwCastError dval dtype = throwError $ "Illegal Casting into " ++ TP.pretty dtype ++ ": " ++ TP.pretty dval
 
 {- evalE :: Expression -> Row -> Maybe Row
 evalE (Op2 e1 o e2)= evalOp2 o <$> evalE  -}

@@ -33,7 +33,7 @@ common common-stanza
     , random
     , mtl,
     fin,
-    regex
+    regex-base, regex-posix
   default-language:
     GHC2021
   default-extensions:
