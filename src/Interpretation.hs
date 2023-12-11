@@ -9,6 +9,7 @@ import Control.Monad.State qualified as S
 {- import Data.Bits (Bits (bitSize), FiniteBits (finiteBitSize)) -}
 
 import Data.Char (toLower, toUpper)
+import Data.Foldable (foldrM)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.List as List
@@ -268,7 +269,8 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
 
 evalSelect :: SelectCommand -> SQLI ()
 evalSelect (SelectCommand expS fS whS gbS oS lS ofS) = do
-  tableFrom <- evalFrom fS
+  tnTableFrom <- evalFrom fS
+  tnTableWhere <- evalWhere whS tnTableFrom
   undefined
 
 evalQuery :: Query -> SQLI ()
@@ -279,7 +281,7 @@ evalSelectCommand :: SelectCommand -> SQLI ()
 evalSelectCommand q = do
   tableFrom <- evalFrom (fromSelect q)
   tableWhere <- evalWhere (whSelect q) tableFrom
-  tableExpr <- evalSelectExpr (exprsSelect q)
+  tableExpr <- evalSelectExpr (exprsSelect q) tableWhere
   undefined
 
 evalDeleteCommand :: DeleteCommand -> SQLI ()
@@ -294,10 +296,7 @@ evalWhere (Just expr) (tn, table) = do
 evalWhereExpr :: Expression -> TableData -> SQLI TableData
 evalWhereExpr expr td = do
   exprNorm <- evalEAgg expr td
-  undefined
-
-{-   return $
-    List.foldr (\x acc -> maybe [] (: acc) (evalE expr x)) [] td -}
+  foldrM (\r acc -> evalE exprNorm r >>= getBool >>= (\b -> if b then return (r : acc) else return acc)) [] td
 
 evalEAgg :: Expression -> TableData -> SQLI Expression
 evalEAgg v@(Var _) td = return v
@@ -418,6 +417,73 @@ evalFun Upper (StringVal str) = return $ StringVal $ List.map toUpper str
 evalFun _ NullVal = return NullVal
 evalFun fun dval = throwExpressionError (Fun fun (Val dval))
 
+evalOffset :: Maybe Int -> Table -> SQLI Table
+evalOffset Nothing td = return td
+evalOffset (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.drop i $ tableData table)
+evalOffset _ _ = throwError "Offset cannot be negative"
+
+evalLimit :: Maybe Int -> Table -> SQLI Table
+evalLimit Nothing td = return td
+evalLimit (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.take i $ tableData table)
+evalLimit _ _ = throwError "Limit cannot be negative"
+
+evalSelectExpr :: [(CountStyle, ColumnExpression)] -> (TableName, Table) -> SQLI (TableName, Table)
+evalSelectExpr = undefined
+
+evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> TableData -> SQLI TableData
+evalSort orders td = do
+  ordering <- normalizeSort orders
+  return $ List.sortBy ordering td
+
+{-
+sort on the first variable, and group by -> repeatedly sort on the second and group by
+
+-}
+normalizeSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
+normalizeSort = foldrM decideOrdering (const $ const LT)
+
+{- foldrM (\(v, mad, mfl) acc -> normalizeSort x acc) undefined undefined -}
+
+decideOrdering :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> (Row -> Row -> Ordering) -> SQLI (Row -> Row -> Ordering)
+decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
+  let (dval1, dval2) =
+        ( Map.findWithDefault NullVal v r1,
+          Map.findWithDefault NullVal v r2
+        )
+   in case mfl of
+        Just NULLSFIRST ->
+          case (dval1, dval2) of
+            (NullVal, NullVal) -> accF r1 r2
+            (NullVal, _) -> LT
+            (_, NullVal) -> GT
+            _ -> decideOrderingAux dval1 dval2 mad accF r1 r2
+        _ ->
+          case (dval1, dval2) of
+            (NullVal, _) -> compare dval1 dval2
+            (_, NullVal) -> compare dval1 dval2
+            _ -> decideOrderingAux dval1 dval2 mad accF r1 r2
+  where
+    decideOrderingAux :: DValue -> DValue -> Maybe OrderTypeAD -> (Row -> Row -> Ordering) -> (Row -> Row -> Ordering)
+    decideOrderingAux dval1 dval2 mad accF r1 r2 =
+      case mad of
+        Just DESC ->
+          case compare dval1 dval2 of
+            EQ -> accF r1 r2
+            LT -> GT
+            GT -> LT
+        _ -> case compare dval1 dval2 of
+          EQ -> accF r1 r2
+          o -> o
+
+evalGroupBy :: [Var] -> (TableName, Table) -> SQLI (TableName, Table)
+evalGroupBy = undefined
+
+{- compare :: DValue -> DValue -> Ordering
+compare (NullVal) _ = GT -}
+
+-- >>> compare NullVal (IntVal 2)
+-- GT
+
 -- ******** Throw Errors ********
 
 throwExpressionError :: Expression -> SQLI a
@@ -450,12 +516,6 @@ evalWhereBool e r = case evalExpression e r of
   Right (BoolVal b) | not b -> Right emptyRow
   Left s -> Left s
   _ -> Left "Where clause is not a boolean expression"-}
-
-evalSelectExpr :: [(CountStyle, ColumnExpression)] -> SQLI ()
-evalSelectExpr = undefined
-
-evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI ()
-evalSort = undefined
 
 -- Empty data types
 emptyScope :: Scope
