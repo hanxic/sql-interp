@@ -10,7 +10,7 @@ import Data.Function ((&))
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
-import Data.Set as Set
+import Data.Maybe (fromMaybe)
 import GenSQL qualified as GSQL
 import Parser qualified as PAR
 import SQLParser qualified as SPAR
@@ -32,6 +32,7 @@ import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
 import Text.Printf (FieldFormat (FieldFormat))
+import Text.RE.TDFA.String
 import Text.Read (readMaybe)
 
 {- import Test.QuickCheck.Monadic qualified as QCM -}
@@ -129,12 +130,12 @@ evalFrom (TableRef tn) = do
   mt <- getTable tn
   case mt of
     Just tnTable -> return tnTable
-    Nothing -> throwError $ "No Table for table reference" ++ show tn
+    Nothing -> throwError $ "No Table for table reference: " ++ SP.pretty tn
 evalFrom fe@(TableAlias tn1 tn2) = do
   mt <- getTable tn1
   case mt of
     Just tnTable ->
-      setAlias tn1 tn2 >> return tnTable
+      setAlias tn1 tn2 >> return (tn2, snd tnTable)
     _ -> throwError $ "No Table for table alias: " ++ SP.pretty fe
 evalFrom (Join fe1 js fe2 jns) = do
   tnTable1 <- evalFrom fe1
@@ -142,6 +143,19 @@ evalFrom (Join fe1 js fe2 jns) = do
   (newName, newTable) <- evalJoin tnTable1 js tnTable2 jns
   setScope newName newTable
   return (newName, newTable)
+
+interp :: SQLI a -> Store -> Either String a
+interp = S.evalState . runExceptT
+
+test_evalFrom :: Test
+test_evalFrom =
+  "evaluate From" ~:
+    TestList
+      [ interp (evalFrom (TableRef "Students")) sampleStore ~?= Right ("Students", tableSampleStudents),
+        interp (evalFrom (TableRef "bla")) sampleStore ~?= Left "No Table for table reference: bla",
+        interp (evalFrom (TableAlias "Students" "Student1")) sampleStore ~?= Right ("Student1", tableSampleStudents),
+        interp (evalFrom (TableAlias "bla" "Student1")) sampleStore ~?= Left "No Table for table alias: bla AS Student1"
+      ]
 
 evalJoin :: (TableName, Table) -> JoinStyle -> (TableName, Table) -> JoinNames -> SQLI (TableName, Table)
 evalJoin (tn1, table1) js (tn2, table2) [] = do
@@ -153,16 +167,6 @@ evalJoin (tn1, table1) js (tn2, table2) jns = do
   joinSpec <- getJoinSpec tn1 tn2 jns
   table <- evalJoinStyle table1 js table2 joinSpec
   return (freeName, table)
-
-test_evalJoin :: Test
-test_evalJoin =
-  "evaluate Op2" ~:
-    TestList
-      []
-
-{- evaluate (Op2 (Val NilVal) Eq (Val NilVal)) initialStore ~?= BoolVal True,
-evaluate (Op2 (Val $ IntVal 3) Eq (Val (IntVal 3))) initialStore ~?= BoolVal True,
-evaluate (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) initialStore ~?= BoolVal False -}
 
 mergeIndex :: IndexName -> IndexName -> IndexName
 mergeIndex in1 in2 =
@@ -257,31 +261,100 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             then return $ \row1 row2 -> Map.lookup jo2 row1 == Map.lookup jo1 row2
             else throwAliases var1 var2
 
-{- throwError "undefined join names: left is " ++ SQLP.pretty alias1 ++ " right is " ++ SQLP.pretty alias2 ++ " but context has " {- ++ aliasStr -} -}
-
-{- (var1, var2) = do
-                        (alias1, jo1) <- case var1 of
-                          VarName name -> throwError "undefined join name: join name needs to be a dot format"
-                          Dot name jo -> return (name, jo)
-                        (alias2, jo2) <- case var2 of
-                          VarName name -> throwError "undefined join name: join name needs to be a dot format"
-                          Dot name jo -> return (name, jo)
-                        return (alias1, jo1, alias2, jo2) -}
-
--- No alias, don't need to do anything
-{- evalFrom (SubQuery SelectCommand) -}
-
-evalQuery :: Query -> SQLI ()
-evalQuery (SelectQuery {}) = undefined
-evalQuery (DeleteQuery {}) = undefined
-
 evalSelect :: SelectCommand -> SQLI ()
 evalSelect (SelectCommand expS fS whS gbS oS lS ofS) = do
   tableFrom <- evalFrom fS
   undefined
 
-evalWhere :: Expression -> SQLI ()
-evalWhere = undefined
+evalQuery :: Query -> SQLI ()
+evalQuery (SelectQuery q) = evalSelectCommand q
+evalQuery (DeleteQuery q) = evalDeleteCommand q
+
+evalSelectCommand :: SelectCommand -> SQLI ()
+evalSelectCommand q = do
+  tableFrom <- evalFrom (fromSelect q)
+  tableWhere <- evalWhere (whSelect q) tableFrom
+  tableExpr <- evalSelectExpr (exprsSelect q)
+  undefined
+
+evalDeleteCommand :: DeleteCommand -> SQLI ()
+evalDeleteCommand = undefined
+
+evalWhere :: Maybe Expression -> (TableName, Table) -> SQLI (TableName, Table)
+evalWhere Nothing (tn, table) = return (tn, table)
+evalWhere (Just expr) (tn, table) = do
+  newTD <- evalWhereExpr expr (tableData table)
+  return (tn, Table (primaryKeys table) (indexName table) newTD)
+
+evalWhereExpr :: Expression -> TableData -> SQLI TableData
+evalWhereExpr expr td = undefined
+
+{-   return $
+    List.foldr (\x acc -> maybe [] (: acc) (evalE expr x)) [] td -}
+
+evalE :: Expression -> Row -> SQLI DValue
+evalE (Var v) r =
+  case Map.lookup v r of
+    Nothing -> return NullVal
+    Just val -> return val
+evalE (Val v) r = return v
+evalE (Op2 e1 o e2) r = do
+  dval1 <- evalE e1 r
+  dval2 <- evalE e2 r
+  evalOp2 o dval1 dval2
+{- evalOp2 o <*> evalE e1 r <*> evalE e2 r -}
+evalE (Op1 o e1) r = evalOp1 o =<< evalE e1 r
+evalE (Fun f e) r = evalFun f <$> evalE e r
+evalE e r = throwError $ "Illegal expression: " ++ TP.pretty e
+
+evalOp2 :: Bop -> DValue -> DValue -> SQLI DValue
+evalOp2 Plus (IntVal i1) (IntVal i2) = return $ IntVal (i1 + i2)
+evalOp2 Minus (IntVal i1) (IntVal i2) = return $ IntVal (i1 - i2)
+evalOp2 Times (IntVal i1) (IntVal i2) = return $ IntVal (i1 * i2)
+evalOp2 Divide (IntVal _) (IntVal 0) = return NullVal
+evalOp2 Divide (IntVal i1) (IntVal i2) = return $ IntVal (i1 `div` i2)
+evalOp2 Modulo _ (IntVal i2) | i2 <= 0 = return NullVal
+evalOp2 Modulo (IntVal i1) (IntVal i2) = return $ IntVal (i1 `mod` i2)
+evalOp2 Eq val1 val2 = return $ BoolVal $ val1 == val2
+evalOp2 Gt val1 val2 = return $ BoolVal $ val1 > val2
+evalOp2 Ge val1 val2 = return $ BoolVal $ val1 >= val2
+evalOp2 Lt val1 val2 = return $ BoolVal $ val1 < val2
+evalOp2 Le val1 val2 = return $ BoolVal $ val1 <= val2
+evalOp2 And (BoolVal b1) (BoolVal b2) = return $ BoolVal $ b1 && b2
+evalOp2 Or (BoolVal b1) (BoolVal b2) = return $ BoolVal $ b1 || b2
+evalOp2 Like (StringVal str1) (StringVal str2) = undefined
+evalOp2 bop dval1 dval2 = throwError $ "Illegal Op2: " ++ TP.pretty (Op2 (Val dval1) bop (Val dval2))
+
+evalOp1 :: Uop -> DValue -> SQLI DValue
+evalOp1 = undefined
+
+evalFun :: Function -> DValue -> DValue
+evalFun = undefined
+
+{- evalE :: Expression -> Row -> Maybe Row
+evalE (Op2 e1 o e2)= evalOp2 o <$> evalE  -}
+
+{- do
+  maybeTable <- getTable tn
+  case maybeTable of
+    Nothing -> throwError "Failure on checking From in Where clause"
+    Just (_, table) ->
+      case maybeExpr of
+        Nothing -> return (tn, table)
+        Just e  -}
+
+{-
+-- Evaluates Where Clasues (filters the rows)
+evalWhere :: Maybe Expression -> Table -> Either ErrorMsg Table
+evalWhere (Just e) t = tableMapEither (evalWhereBool e) t
+evalWhere Nothing t = Right t
+
+evalWhereBool :: Expression -> Row -> Either ErrorMsg Row
+evalWhereBool e r = case evalExpression e r of
+  Right (BoolVal b) | b -> Right r
+  Right (BoolVal b) | not b -> Right emptyRow
+  Left s -> Left s
+  _ -> Left "Where clause is not a boolean expression"-}
 
 evalSelectExpr :: [(CountStyle, ColumnExpression)] -> SQLI ()
 evalSelectExpr = undefined
@@ -333,8 +406,13 @@ tableSampleStudents = case PAR.parse (TPAR.tableP tableSampleStudentsPK tableSam
   Right x -> x
   Left x -> Table tableSampleStudentsPK tableSampleStudentsIN []
 
+minimumTableStudent = [(VarName "first_name", "")]
+
 -- >>> TP.pretty tableSampleStudents
 -- "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
+
+sampleStore :: Store
+sampleStore = Store (Map.fromList [("Students", tableSampleStudents), ("Grades", tableSampleGrades)]) Map.empty
 
 -- Helper functions
 tableFMap :: (Row -> Row) -> Table -> Table
@@ -566,3 +644,33 @@ lengthGroupBy :: GroupBy a -> Int
 lengthGroupBy (SingleGroupBy _) = 1
 lengthGroupBy (MultiGroupBy _ vs) = 1 + lengthGroupBy vs
  -}
+
+test1000 = interp (evalFrom (Join (TableRef "Students") InnerJoin (TableRef "Grades") [(Dot "Students" (VarName "student_id"), Dot "Grades" (VarName "student_id"))])) sampleStore
+
+test1001 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
+      indexName = [(VarName "age", IntType 32), (VarName "first_name", StringType 255), (VarName "gender", StringType 255), (VarName "grade", IntType 32), (VarName "last_name", StringType 255)],
+      tableData =
+        [ Map.fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
+          Map.fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
+          Map.fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
+          Map.fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "Math")],
+          Map.fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
+          Map.fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 95), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 84), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 90), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 86), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 80), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "History")]
+        ]
+    }
+
+test1002 = TP.pretty test1001
+
+-- >>> test1002
+-- "student_id,subject,age,first_name,gender,grade,last_name\n1,Math,20,John,Male,85,Doe\n1,English,20,John,Male,78,Doe\n1,History,20,John,Male,92,Doe\n2,Math,21,Jane,Female,92,Smith\n2,English,21,Jane,Female,88,Smith\n2,History,21,Jane,Female,76,Smith\n3,Math,22,Michael,Male,78,Johnson\n3,English,22,Michael,Male,95,Johnson\n3,History,22,Michael,Male,84,Johnson\n4,Math,20,Emily,Female,90,Williams\n4,English,20,Emily,Female,85,Williams\n4,History,20,Emily,Female,88,Williams\n5,Math,23,Chris,Male,86,Anderson\n5,English,23,Chris,Male,92,Anderson\n5,History,23,Chris,Male,80,Anderson"
