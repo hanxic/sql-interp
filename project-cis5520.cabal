@@ -32,7 +32,8 @@ common common-stanza
     , directory
     , random
     , mtl,
-    fin
+    fin,
+    regex-base, regex-posix
   default-language:
     GHC2021
   default-extensions:
