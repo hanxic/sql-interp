@@ -12,6 +12,7 @@ import SQLSyntax
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Text.ParserCombinators.ReadP (count)
+import Text.PrettyPrint (render)
 
 errorMsgUnitTest :: Either String b
 errorMsgUnitTest = Left "No parses"
@@ -30,6 +31,9 @@ prop_roundtrip_create cc = P.parse ccP (SPP.pretty cc) == Right cc
 
 prop_roundtrip_delete :: DeleteCommand -> Bool
 prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
+
+prop_roundtrip_queries :: [Query] -> Bool
+prop_roundtrip_queries qs = P.parse sqlP (render $ SPP.printQueries qs) == Right qs
 
 wsP :: Parser a -> Parser a
 wsP p = many P.space *> p <* many P.space
@@ -744,19 +748,43 @@ test_idCreateP =
 ccP :: Parser CreateCommand
 ccP = CreateCommand <$> ccPrefixP <*> nameP <*> parens (P.sepBy1 idCreateP P.comma)
 
-test9 = "Var4 INT(26)"
-
-test13 = "(Var0 BOOLEAN, Var1 BOOLEAN NOT NULL PRIMARY KEY, Var1 VARCHAR(159) NOT NULL)"
-
-test10 = idCreateP
-
--- >>> P.parse test10 test9
--- Left "No parses"
+test_ccP :: Test
+test_ccP =
+  TestList
+    [ P.parse ccP "CREATE TABLE Grades (student_id INTEGER)" ~?= Right (CreateCommand False "Grades" [("student_id", IntType 16, False)]),
+      P.parse ccP "CREATE TABLE Grades (student_id INTEGER PRIMARY KEY, grades INTEGER)" ~?= Right (CreateCommand False "Grades" [("student_id", IntType 16, True), ("grades", IntType 16, False)])
+    ]
 
 dcP :: Parser DeleteCommand
 dcP = dcPrefixP *> (DeleteCommand <$> nameP <*> whSelectP)
   where
     dcPrefixP = pWords ["DELETE", "FROM"]
+
+queryP :: Parser Query
+queryP = SelectQuery <$> scP <|> DeleteQuery <$> dcP <|> CreateQuery <$> ccP
+
+sqlP :: Parser [Query]
+sqlP = many (queryP <* wsP (P.char ';'))
+
+test_sqlP :: Test
+test_sqlP =
+  TestList
+    [ P.parse sqlP "CREATE TABLE Grades (student_id INTEGER); CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255))"
+        ~?= Right
+          [ CreateQuery $
+              CreateCommand
+                False
+                "Grades"
+                [("student_id", IntType 16, False)],
+            CreateQuery $
+              CreateCommand
+                False
+                "Students"
+                [ ("student_id", IntType 16, True),
+                  ("name", StringType 255, False)
+                ]
+          ]
+    ]
 
 test_all :: IO Counts
 test_all =
@@ -783,8 +811,21 @@ test_all =
         test_limitSelectP,
         test_offsetSelectP,
         test_ccPrefixP,
-        test_idCreateP
+        test_idCreateP,
+        test_ccP
       ]
+
+test102 = [CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0", BoolType, True), ("Var0", StringType 156, True), ("Var2", BoolType, True)]}), DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})]
+
+test103 = render $ SPP.printQueries test102
+
+-- >>> test103
+-- "CREATE TABLE IF NOT EXISTS Table0 (Var0 BOOLEAN PRIMARY KEY, Var0 VARCHAR(156) PRIMARY KEY, Var2 BOOLEAN PRIMARY KEY); DELETE FROM Table4 WHERE AVG(DISTINCT 4512371);"
+
+test104 = P.doParse sqlP test103
+
+-- >>> test104
+-- Just ([CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0",BoolType,True),("Var0",StringType 156,True),("Var2",BoolType,True)]}),DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})],"")
 
 qc :: IO ()
 qc = do

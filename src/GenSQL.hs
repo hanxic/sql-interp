@@ -285,6 +285,14 @@ instance Arbitrary DeleteCommand where
       <$> (QC.elements =<< genTablePool)
       <*> arbitrary
 
+instance Arbitrary Query where
+  arbitrary =
+    QC.frequency
+      [ (1, SelectQuery <$> arbitrary),
+        (1, CreateQuery <$> arbitrary),
+        (1, DeleteQuery <$> arbitrary)
+      ]
+
 -- ******** Table Generator ********
 
 type AnnotatedHeader = IndexName

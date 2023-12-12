@@ -16,6 +16,8 @@ import Test.QuickCheck qualified as QC
 data Query
   = SelectQuery SelectCommand
   | DeleteQuery DeleteCommand
+  | CreateQuery CreateCommand
+  deriving (Eq, Show)
 
 -- **** Section for DeleteCommand ****
 

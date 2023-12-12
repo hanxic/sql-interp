@@ -273,8 +273,11 @@ instance PP DeleteCommand where
       PP.text
         "DELETE FROM"
         <+> pp fr
-        <+> PP.text "WHERE"
-        <+> pp wh -- Probably need a nested here
+        <+> if null wh
+          then PP.empty
+          else
+            PP.text "WHERE"
+              <+> pp wh -- Probably need a nested here
 
 instance PP UpsertIntoCommand where
   pp :: UpsertIntoCommand -> Doc
@@ -290,6 +293,14 @@ instance PP UpsertIntoCommand where
 instance PP AlterTableCommand where
   pp (AlterTableCommand fr ve co) =
     PP.text "ALTER TABLE" <+> pp fr <+> pp ve <+> pp co --- TODO: This is buggy
+
+instance PP Query where
+  pp (SelectQuery sc) = pp sc
+  pp (DeleteQuery dc) = pp dc
+  pp (CreateQuery cc) = pp cc
+
+printQueries :: [Query] -> Doc
+printQueries qs = PP.hsep (map pp qs)
 
 -- TODO: Add nested to make sure not over 80 words
 
