@@ -25,6 +25,7 @@ import TableParser qualified as TPAR
 import TablePrinter qualified as TP
 import TableSyntax
   ( ErrorMsg,
+    IndexAttribute (PrimaryKey),
     IndexName,
     PrimaryKeys,
     Row,
@@ -276,7 +277,7 @@ evalSelectCommand :: SelectCommand -> SQLI ()
 evalSelectCommand q = do
   tableFrom <- evalFrom (fromSelect q)
   tableWhere <- evalWhere (whSelect q) tableFrom
-  tableExpr <- evalSelectExpr (exprsSelect q) tableWhere
+  tableGroupBy <- evalGroupBy (groupbySelect q) tableWhere
   undefined
 
 evalDeleteCommand :: DeleteCommand -> SQLI ()
@@ -309,7 +310,11 @@ evalEAgg (AggFun aggfun cs expr) td = do
   Val <$> evalEAggAux aggfun cs expr' td
   where
     evalEAggAux :: AggFunction -> CountStyle -> Expression -> TableData -> SQLI DValue
-    evalEAggAux Sum _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc >>= (\i2 -> return $ IntVal (i1 + i2)))) (IntVal 0) td
+    evalEAggAux Sum _ expr td =
+      foldM
+        (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc >>= (\i2 -> return $ IntVal (i1 + i2))))
+        (IntVal 0)
+        td
     evalEAggAux Count _ expr td = foldM (\acc r -> evalE expr r >>= (\x -> getInt acc >>= (\i -> return $ IntVal $ if x /= NullVal then i + 1 else i))) (IntVal 0) td
     -- Count non-bool expression not supported / may generate undefined behavior
     evalEAggAux Max _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc Data.Functor.<&> (IntVal . max i1))) (IntVal 0) td
@@ -321,6 +326,14 @@ evalEAgg (AggFun aggfun cs expr) td = do
         (IntVal numerator, IntVal denomenator) -> if denomenator == 0 then return $ IntVal 0 else return $ IntVal $ numerator `div` denomenator
         (_, _) -> throwError "AggFunction Type error in Avg"
 
+{- evalEAggNI :: DValue -> DValue -> ()SQLI DValue -}
+test_evalEAgg :: Test
+test_evalEAgg =
+  TestList
+    [ interp (evalEAgg (AggFun Sum All (Var $ VarName "var1")) []) sampleStore ~?= Right (Val $ IntVal 0),
+      interp (evalEAgg (AggFun Sum All (Var $ VarName "var2")) [Map.fromList [(VarName "var1", IntVal 1)]]) sampleStore ~?= Right (Val $ IntVal 0)
+    ]
+
 -- first do a regularization in expr -> make sure its Aggfunction free
 -- Map each row into some DValue
 -- Then Aggregate
@@ -328,6 +341,7 @@ evalEAgg (AggFun aggfun cs expr) td = do
 getInt :: DValue -> SQLI Int
 getInt (IntVal i) = return i
 getInt b@(BoolVal _) = getInt =<< weakCast b (IntType 32)
+getInt NullVal = return 0
 getInt v = throwCastError v (IntType 32)
 
 getBool :: DValue -> SQLI Bool
@@ -508,8 +522,29 @@ Steps for select
 
 -}
 
-evalSelect :: [(CountStyle, ColumnExpression)] -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
-evalSelect cs tn pk iName rowGroups = undefined
+evalSelect :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelect (cs, ce) tn pk iName rowGroups =
+  Table pk iName
+    <$> foldM
+      (\acc x -> evalSelectAux ce pk iName x >>= (\y -> return (y : acc)))
+      []
+      rowGroups
+  where
+    evalSelectAux :: [ColumnExpression] -> PrimaryKeys -> IndexName -> [Row] -> SQLI Row
+    evalSelectAux ce pk iName td =
+      foldM (\acc x -> evalColumnExpr x pk iName td <&> (acc `Map.union`)) Map.empty ce
+    {- foldM (\acc x -> evalColumnExpr pk iName td x) (Map.empty) ce -}
+    evalColumnExpr :: ColumnExpression -> PrimaryKeys -> IndexName -> [Row] -> SQLI Row
+    evalColumnExpr (ColumnName expr) pk iName td = do
+      exprNorm <- evalEAgg expr td
+      resValue <- evalE exprNorm (List.head td)
+      return $ Map.singleton (VarName $ TP.pretty expr) resValue
+    evalColumnExpr (ColumnAlias expr alias) pk iName td = do
+      exprNorm <- evalEAgg expr td
+      resValue <- evalE exprNorm (List.head td)
+      return $ Map.singleton (VarName alias) resValue
+    evalColumnExpr AllVar pk iName td =
+      return $ List.head td
 
 -- Basically an eval expression and return a dvalue -> Do this for every columm
 {-

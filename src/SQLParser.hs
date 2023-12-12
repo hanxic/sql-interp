@@ -391,11 +391,6 @@ test_exprsSelectP =
       P.parse exprsSelectP "SELECT" ~?= errorMsgUnitTest
     ]
 
-test500 = P.doParse exprsSelectP "SELECT DISTINCT A AS Something"
-
--- >>> test500
--- Just ((Distinct,[ColumnAlias (Var (VarName "A")) "Something"]),"")
-
 pWordsCons :: String -> Parser String -> Parser String
 pWordsCons str p = (\x xs -> x ++ " " ++ xs) <$> wsP (P.fullString str) <*> p
 
