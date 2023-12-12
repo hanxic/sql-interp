@@ -44,46 +44,6 @@ prop_roundtrip_table = QC.forAll genPKIN $ \(pk, iName) ->
         let table = Table pk iName td
          in P.parse (tableP pk iName) (TP.pretty table) == Right table
 
-test3 = NE.fromList [(VarName "var0", StringType 6), (VarName "var1", IntType 22), (VarName "var2", StringType 198)]
-
-test4 =
-  []
-
-test5 = Table test3 test4 test2
-
--- >>> TP.pretty test5
--- "var0,var1,var2\n{f,NULL,B\nNULL,NULL,1W"
-
-test6 = "var0,var1,var2\n{f,NULL,B\nNULL,NULL,1W"
-
-test7 = P.doParse (tableP test3 test4) test6
-
-test11 =
-  Table
-    { primaryKeys = NE.fromList [(VarName "var0", StringType 6), (VarName "var1", IntType 22), (VarName "var2", StringType 198)],
-      indexName = [],
-      tableData =
-        [ fromList [(VarName "var0", StringVal "{f"), (VarName "var1", NullVal), (VarName "var2", StringVal "B")],
-          fromList [(VarName "var0", StringVal "NULL"), (VarName "var1", NullVal), (VarName "var2", StringVal "1W")]
-        ]
-    }
-
--- >>> test7
--- Just (Table {primaryKeys = (VarName "var0",StringType 6) :| [(VarName "var1",IntType 22),(VarName "var2",StringType 198)], indexName = [], tableData = [fromList [(VarName "var0",StringVal "{f"),(VarName "var1",NullVal),(VarName "var2",StringVal "B")],fromList [(VarName "var0",StringVal "NULL"),(VarName "var1",NullVal),(VarName "var2",StringVal "1W")]]},"")
-test8 = P.parse (validHeaderPAux test3 test4 test9) ""
-
-test9 = [VarName "var0", VarName "var1", VarName "var3", VarName "var7", Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (Dot "var1" (VarName "e"))))))]
-
--- >>> test8
--- Left "No parses"
-
-test2 =
-  [ fromList [(VarName "var0", StringVal "{f"), (VarName "var1", NullVal), (VarName "var2", StringVal "B")],
-    fromList [(VarName "var0", NullVal), (VarName "var1", NullVal), (VarName "var2", StringVal "1W")]
-  ]
-
-{- P.parse tableP (TP.pretty t) == Right t -}
-
 type PrimaryKeysList = IndexName
 
 nameTP :: Parser String
