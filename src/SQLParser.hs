@@ -370,24 +370,31 @@ catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.any
 columnExpressionP :: Parser ColumnExpression
 columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> nameP) <|> ColumnName <$> expP <|> starP
 
-exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
+exprsSelectP :: Parser (CountStyle, [ColumnExpression])
 exprsSelectP =
-  wsP (P.string exprsSelectKW) *> P.sepBy1 (exprsSelectPAux <|> parens exprsSelectPAux) P.comma
+  (,)
+    <$> (wsP (P.string exprsSelectKW) *> countStyleP)
+    <*> P.sepBy1 (exprsSelectPAux <|> parens exprsSelectPAux) P.comma
   where
     exprsSelectKW = "SELECT"
-    exprsSelectPAux :: Parser (CountStyle, ColumnExpression)
-    exprsSelectPAux = (,) <$> countStyleP <*> columnExpressionP
+    exprsSelectPAux :: Parser ColumnExpression
+    exprsSelectPAux = columnExpressionP
 
 test_exprsSelectP :: Test
 test_exprsSelectP =
   TestList
-    [ P.parse exprsSelectP "SELECT A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS Something" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something")],
-      P.parse exprsSelectP "SELECT DISTINCT A AS Something" ~?= Right [(Distinct, ColumnAlias (Var $ VarName "A") "Something")],
-      P.parse exprsSelectP "SELECT A A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something"), (All, ColumnAlias (Var $ VarName "B") "C")],
+    [ P.parse exprsSelectP "SELECT A" ~?= Right (All, [ColumnName $ Var $ VarName "A"]),
+      P.parse exprsSelectP "SELECT A AS Something" ~?= Right (All, [ColumnAlias (Var $ VarName "A") "Something"]),
+      P.parse exprsSelectP "SELECT DISTINCT A AS Something" ~?= Right (Distinct, [ColumnAlias (Var $ VarName "A") "Something"]),
+      P.parse exprsSelectP "SELECT A A" ~?= Right (All, [ColumnName $ Var $ VarName "A"]),
+      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right (All, [ColumnAlias (Var $ VarName "A") "Something", ColumnAlias (Var $ VarName "B") "C"]),
       P.parse exprsSelectP "SELECT" ~?= errorMsgUnitTest
     ]
+
+test500 = P.doParse exprsSelectP "SELECT DISTINCT A AS Something"
+
+-- >>> test500
+-- Just ((Distinct,[ColumnAlias (Var (VarName "A")) "Something"]),"")
 
 pWordsCons :: String -> Parser String -> Parser String
 pWordsCons str p = (\x xs -> x ++ " " ++ xs) <$> wsP (P.fullString str) <*> p
@@ -671,46 +678,6 @@ scP =
     <*> orderbySelectP
     <*> limitSelectP
     <*> offsetSelectP
-
-test7 =
-  SelectCommand
-    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" $ VarName "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
-      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" $ VarName "Var2"), (Dot "Table0" $ VarName "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" $ VarName "Var3")]) [(Dot "Table0" $ VarName "Var2", Dot "Table0" $ VarName "Var2"), (VarName "Var0", VarName "Var3"), (VarName "Var0", VarName "Var0")],
-      whSelect = Nothing,
-      groupbySelect = [Dot "Table2" $ VarName "Var0", Dot "Table1" $ VarName "Var3", VarName "Var2"],
-      orderbySelect = [(Dot "Table0" $ VarName "Var0", Nothing, Nothing), (Dot "Table5" $ VarName "Var0", Just DESC, Just NULLSFIRST), (VarName "Var4", Nothing, Just NULLSFIRST)],
-      limitSelect = Nothing,
-      offsetSelect = Nothing
-    }
-
--- >>> SPP.pretty test7
--- "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT LENGTH(Var3) AS Table2\n FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n GROUP BY Table2.Var0, Table1.Var3, Var2\n ORDER BY Table0.Var0, Table5.Var0 DESC NULLS FIRST, Var4 NULLS FIRST;"
-
-test8 :: String
-test8 = "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT LENGTH(Var3) AS Table2\n FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n GROUP BY Table2.Var0, Table1.Var3, Var2\n ORDER BY Table0.Var0, Table5.Var0 DESC NULLS FIRST, Var4 NULLS FIRST;"
-
--- >>> P.parse scP test8
--- Right (SelectCommand {exprsSelect = [(All,AllVar),(Distinct,ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"),(Distinct,AllVar),(Distinct,ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")], fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0",Dot "Table2" "Var2"),(Dot "Table0" "Var2",VarName "Var3"),(VarName "Var3",Dot "Table4" "Var3")]) [], whSelect = Nothing, groupbySelect = [], orderbySelect = [], limitSelect = Nothing, offsetSelect = Nothing})
-
-test14 =
-  SelectCommand
-    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" $ VarName "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
-      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" $ VarName "Var2"), (Dot "Table0" $ VarName "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" $ VarName "Var3")]) [],
-      whSelect = Nothing,
-      groupbySelect = [],
-      orderbySelect = [],
-      limitSelect = Nothing,
-      offsetSelect = Nothing
-    }
-
-test11 = "FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n "
-
-test16 = "FROM (Table5 LEFT JOIN Table4) OUTER JOIN Table0 ON Table0.Var0=Var0,Var2=Var0,Var0=Table1.Var0\n "
-
-test12 = fromSelectP
-
--- >>> P.doParse test12 test11
--- Just (Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0",Dot "Table2" "Var2"),(Dot "Table0" "Var2",VarName "Var3"),(VarName "Var3",Dot "Table4" "Var3")]) [],"ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n ")
 
 ccPrefixP :: Parser Bool
 ccPrefixP =

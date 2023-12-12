@@ -212,7 +212,7 @@ data CreateCommand = CreateCommand
 -- **** Section for SelectCommand ****
 
 data SelectCommand = SelectCommand
-  { exprsSelect :: [(CountStyle, ColumnExpression)],
+  { exprsSelect :: (CountStyle, [ColumnExpression]),
     fromSelect :: FromExpression,
     whSelect :: Maybe Expression,
     groupbySelect :: [Var],

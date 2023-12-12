@@ -237,7 +237,7 @@ constrainSize n g = do
 genSelectCommand :: Int -> Gen SelectCommand
 genSelectCommand n =
   SelectCommand
-    <$> atLeastN 1 arbitrary
+    <$> ((,) <$> arbitrary <*> atLeastN 1 arbitrary)
     <*> genFromExpression n'
     <*> arbitrary
     <*> QC.sized (`constrainSize` arbitrary)

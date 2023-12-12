@@ -208,12 +208,12 @@ ppList :: Doc -> [Doc] -> Doc
 ppList p l = PP.hsep $ PP.punctuate p l
 
 ppSelectCommandAux :: SelectCommand -> Doc
-ppSelectCommandAux (SelectCommand exprs sf swh gb ob li o) =
+ppSelectCommandAux (SelectCommand (cs, ce) sf swh gb ob li o) =
   ppList
     ppNewLine
     $ filter
       (/= PP.empty)
-      [ PP.text "SELECT" <+> ppList PP.comma (map ppSE exprs),
+      [ PP.text "SELECT" <+> (if cs == Distinct then PP.text "DISTINCT" else PP.empty) <+> ppList PP.comma (map ppSE ce),
         PP.text "FROM" <+> pp sf,
         if null swh
           then PP.empty
@@ -232,13 +232,13 @@ ppSelectCommandAux (SelectCommand exprs sf swh gb ob li o) =
           else PP.text "OFFSET" <+> pp o
       ]
 
-ppSE :: (CountStyle, ColumnExpression) -> Doc
-ppSE (cs, te@(ColumnName _)) =
-  pp cs <+> if isBaseTableExpression te then pp te else PP.parens $ pp te
-ppSE (cs, te@(ColumnAlias e v)) =
-  pp cs <+> if isBaseTableExpression te then pp te else PP.parens (pp e) <+> PP.text "AS" <+> pp v
-ppSE (cs, AllVar) =
-  pp cs <+> pp AllVar
+ppSE :: ColumnExpression -> Doc
+ppSE te@(ColumnName _) =
+  if isBaseTableExpression te then pp te else PP.parens $ pp te
+ppSE te@(ColumnAlias e v) =
+  if isBaseTableExpression te then pp te else PP.parens (pp e) <+> PP.text "AS" <+> pp v
+ppSE AllVar =
+  pp AllVar
 
 ppOB :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> Doc
 ppOB (v, o1, o2) =

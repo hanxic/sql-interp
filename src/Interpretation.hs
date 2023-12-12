@@ -160,6 +160,7 @@ test_evalFrom =
       [ interp (evalFrom (TableRef "Students")) sampleStore ~?= Right ("Students", tableSampleStudents),
         interp (evalFrom (TableRef "bla")) sampleStore ~?= Left "No Table for table reference: bla",
         interp (evalFrom (TableAlias "Students" "Student1")) sampleStore ~?= Right ("Student1", tableSampleStudents),
+        S.execState (runExceptT (evalFrom (TableAlias "Students" "Student1"))) sampleStore ~?= Store (scope sampleStore) (alias sampleStore `Map.union` Map.singleton "Student1" "Students"),
         interp (evalFrom (TableAlias "bla" "Student1")) sampleStore ~?= Left "No Table for table alias: bla AS Student1"
       ]
 
@@ -267,12 +268,6 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             then return $ \row1 row2 -> Map.lookup jo2 row1 == Map.lookup jo1 row2
             else throwAliases var1 var2
 
-evalSelect :: SelectCommand -> SQLI ()
-evalSelect (SelectCommand expS fS whS gbS oS lS ofS) = do
-  tnTableFrom <- evalFrom fS
-  tnTableWhere <- evalWhere whS tnTableFrom
-  undefined
-
 evalQuery :: Query -> SQLI ()
 evalQuery (SelectQuery q) = evalSelectCommand q
 evalQuery (DeleteQuery q) = evalDeleteCommand q
@@ -377,6 +372,21 @@ evalOp2 bop _ NullVal = return NullVal
 evalOp2 bop dval1 dval2 =
   throwExpressionError (Op2 (Val dval1) bop (Val dval2))
 
+test_evaluateOp2 :: Test
+test_evaluateOp2 =
+  "evaluate Op2" ~:
+    TestList
+      [ interp (evalE (Op2 (Val NullVal) Eq (Val NullVal)) Map.empty) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Val $ IntVal 3) Eq (Val (IntVal 3))) Map.empty) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) Map.empty) sampleStore ~?= Right (BoolVal False),
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) Map.empty) sampleStore ~?= Right NullVal,
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (StringVal "what"))) sampleStore ~?= Left "Illegal Casting into INT(64): \"what\"",
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (IntVal 1))) sampleStore ~?= Right (IntVal 2),
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (BoolVal False))) sampleStore ~?= Right (IntVal 1),
+        interp (evalE (Op2 (Var $ VarName "student_id") Like (Val $ StringVal "Hi")) (Map.singleton (VarName "student_id") (StringVal "Hi"))) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Var $ VarName "student_id") Like (Val $ StringVal "John[1-9]")) (Map.singleton (VarName "student_id") (StringVal "John1"))) sampleStore ~?= Right (BoolVal True)
+      ]
+
 evalOp2Robust :: Bop -> DValue -> DValue -> SQLI DValue
 evalOp2Robust bop dval1 dval2 =
   if level bop >= 17
@@ -427,7 +437,7 @@ evalLimit Nothing td = return td
 evalLimit (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.take i $ tableData table)
 evalLimit _ _ = throwError "Limit cannot be negative"
 
-evalSelectExpr :: [(CountStyle, ColumnExpression)] -> (TableName, Table) -> SQLI (TableName, Table)
+evalSelectExpr :: (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI (TableName, Table)
 evalSelectExpr = undefined
 
 evalOrderBy :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> TableData -> SQLI TableData
@@ -444,6 +454,12 @@ sort on the first variable, and group by -> repeatedly sort on the second and gr
 -}
 getOrdering :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
 getOrdering = foldrM decideOrdering (const $ const LT)
+
+test_evalOrderBy :: Test
+test_evalOrderBy =
+  TestList
+    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] (tableData tableSampleStudents)) sampleStore ~?= Right (reverse (tableData tableSampleStudents))
+    ]
 
 {- foldrM (\(v, mad, mfl) acc -> normalizeSort x acc) undefined undefined -}
 
@@ -483,6 +499,17 @@ evalGroupBy vars (tn, Table pk iName td) = do
   ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
   td <- evalSort ordering td
   return $ List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
+
+{-
+Steps for select
+1. For each group, do the following
+  1.1. If it is aggregate, then do it with that group
+  1.2. Otherwise, only select the first one
+
+-}
+
+evalSelect :: [(CountStyle, ColumnExpression)] -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelect cs tn pk iName rowGroups = undefined
 
 -- Basically an eval expression and return a dvalue -> Do this for every columm
 {-
@@ -582,8 +609,10 @@ minimumTableStudent = [(VarName "first_name", "")]
 -- >>> TP.pretty tableSampleStudents
 -- "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
 
+tableNumber = Table (NE.fromList [(VarName "num1", IntType 32), (VarName "num2", IntType 32)]) [(VarName "num3", StringType 255)] [Map.fromList [(VarName "num1", IntVal 1), (VarName "num2", IntVal 1), (VarName "num3", StringVal "a")]]
+
 sampleStore :: Store
-sampleStore = Store (Map.fromList [("Students", tableSampleStudents), ("Grades", tableSampleGrades)]) Map.empty
+sampleStore = Store (Map.fromList [("Students", tableSampleStudents), ("Grades", tableSampleGrades), ("Number", tableNumber)]) Map.empty
 
 -- Helper functions
 tableFMap :: (Row -> Row) -> Table -> Table
