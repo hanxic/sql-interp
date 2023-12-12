@@ -272,9 +272,8 @@ instance Arbitrary CreateCommand where
       <*> (QC.elements =<< genTablePool)
       <*> QC.sized
         ( `constrainSize1`
-            ( (,,,)
+            ( (,,)
                 <$> (QC.elements =<< genNamePool)
-                <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
             )

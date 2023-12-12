@@ -687,7 +687,7 @@ test204 = P.doParse fromSelectP "FROM Students"
 test205 = P.doParse groupbySelectP ""
 
 -- >>> test205
--- Nothing
+-- Just ([],"")
 
 ccPrefixP :: Parser Bool
 ccPrefixP =
@@ -726,20 +726,19 @@ dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOLEA
   | BoolType
   deriving (Eq, Show)-}
 
-idCreateP :: Parser (Name, DType, Bool, Bool)
+idCreateP :: Parser (Name, DType, Bool)
 idCreateP =
-  (,,,)
+  (,,)
     <$> nameP
     <*> dTypeP
-    <*> (True <$ pWords ["NOT", "NULL"] <|> pure False)
     <*> (True <$ pWords ["PRIMARY", "KEY"] <|> pure False)
 
 test_idCreateP :: Test
 test_idCreateP =
   TestList
-    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True, True),
-      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True, True),
-      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False, True)
+    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True),
+      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True),
+      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False)
     ]
 
 ccP :: Parser CreateCommand

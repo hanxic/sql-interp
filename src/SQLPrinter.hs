@@ -259,10 +259,9 @@ instance PP CreateCommand where
         <+> PP.parens
           ( ppList PP.comma $
               map
-                ( \(n, t, nn, pk) ->
+                ( \(n, t, pk) ->
                     pp n
                       <+> pp t
-                      <+> (if nn then PP.text "NOT NULL" else PP.empty)
                       <+> (if pk then PP.text "PRIMARY KEY" else PP.empty)
                 )
                 ids

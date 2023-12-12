@@ -15,7 +15,7 @@ import Data.Functor ((<&>))
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import GenSQL qualified as GSQL
 import Parser qualified as PAR
 import SQLParser qualified as SPAR
@@ -327,9 +327,6 @@ test302 =
           fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1)]
         ]
     }
-
-evalDeleteCommand :: DeleteCommand -> SQLI ()
-evalDeleteCommand = undefined
 
 evalWhere :: Maybe Expression -> (TableName, Table) -> SQLI (TableName, Table)
 evalWhere Nothing (tn, table) = return (tn, table)
@@ -741,6 +738,34 @@ tableMapEither f t = do
 
 tableLength :: Table -> Int
 tableLength = length . tableData
+
+evalCreateCommand :: CreateCommand -> SQLI ()
+evalCreateCommand (CreateCommand ifnotexists namecreate idcreate) = do
+  tableMaybe <- getTable namecreate
+  table <- evalIDCreate idcreate
+  if ifnotexists && isJust tableMaybe
+    then return ()
+    else setScope namecreate table
+
+evalIDCreate :: [(Name, DType, Bool)] -> SQLI Table
+evalIDCreate idcreate = do
+  pkList <- mapM parseIDCreate (List.filter (\(_, _, isPrimary) -> isPrimary) idcreate)
+  iName <- mapM parseIDCreate (List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate)
+  return $ Table (NE.fromList pkList) iName []
+  where
+    parseIDCreate :: (Name, DType, Bool) -> SQLI (Var, DType)
+    parseIDCreate (name, dtype, isPrimary) =
+      case PAR.parse SPAR.varP name of
+        Right var -> return (var, dtype)
+        Left _ -> throwError "Fail to parse name"
+
+evalDeleteCommand :: DeleteCommand -> SQLI ()
+evalDeleteCommand (DeleteCommand fromdelete whdelete) = do
+  delScope fromdelete
+
+{- let pkList = List.foldr (\x acc -> parseIDCreate x) idcreate
+ in let indexName = List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate in
+  return $ Table  -}
 
 {- -- Evaluates Query
 evalQuery :: Query -> Scope -> Either ErrorMsg Table

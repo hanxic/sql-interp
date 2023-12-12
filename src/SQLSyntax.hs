@@ -204,7 +204,7 @@ data DeleteCommand = DeleteCommand
 data CreateCommand = CreateCommand
   { ifNotExists :: Bool,
     nameCreate :: TableName,
-    idCreate :: [(Name, DType, Bool, Bool)]
+    idCreate :: [(Name, DType, Bool)]
     -- TODO: Haven't finished
   }
   deriving (Eq, Show)
