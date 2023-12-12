@@ -585,13 +585,13 @@ test_fromSelectP =
 
 whSelectP :: Parser (Maybe Expression)
 whSelectP =
-  catchAnyWord whSelectKW (wsP (P.string whSelectKW) *> (Just <$> expP))
+  catchAnyWord whSelectKW (wsP (P.string whSelectKW) *> (Just <$> expP)) <|> return Nothing
   where
     whSelectKW = "WHERE"
 
 groupbySelectP :: Parser [Var]
 groupbySelectP =
-  catchAnyWordL "GROUP" (pWords ["GROUP", "BY"] *> P.sepBy1 varP P.comma)
+  catchAnyWordL "GROUP" (pWords ["GROUP", "BY"] *> P.sepBy1 varP P.comma) <|> return []
   where
     groupbySelectKW = "GROUP BY"
 
@@ -606,7 +606,7 @@ test_groupbySelectP =
 
 orderbySelectP :: Parser [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
 orderbySelectP =
-  catchAnyWordL "ORDER" (wsP (P.string orderbySelectKW) *> P.sepBy1 orderSelectPAux P.comma)
+  catchAnyWordL "ORDER" (wsP (P.string orderbySelectKW) *> P.sepBy1 orderSelectPAux P.comma) <|> return []
   where
     orderbySelectKW = "ORDER BY"
     orderSelectPAux :: Parser (Var, Maybe OrderTypeAD, Maybe OrderTypeFL)
@@ -625,7 +625,7 @@ test_orderbySelectP =
 
 limitSelectP :: Parser (Maybe Int)
 limitSelectP =
-  catchAnyWord limitSelectKW (wsP (P.string limitSelectKW) *> (Just <$> P.int))
+  catchAnyWord limitSelectKW (wsP (P.string limitSelectKW) *> (Just <$> P.int)) <|> return Nothing
   where
     limitSelectKW = "LIMIT"
 
@@ -647,7 +647,7 @@ test_limitSelectP =
 
 offsetSelectP :: Parser (Maybe Int)
 offsetSelectP =
-  catchAnyWord offsetSelectKW (wsP (P.string offsetSelectKW) *> (Just <$> P.int))
+  catchAnyWord offsetSelectKW (wsP (P.string offsetSelectKW) *> (Just <$> P.int)) <|> return Nothing
   where
     {- wsP (P.string "OFFSET") *> (Just <$> P.int)
       <|> Nothing <$ P.lookAhead (wsP P.anyWord) -}
@@ -673,6 +673,21 @@ scP =
     <*> orderbySelectP
     <*> limitSelectP
     <*> offsetSelectP
+
+test203 = P.doParse exprsSelectP "SELECT *\n"
+
+-- >>> test203
+-- Just ((All,[AllVar]),"")
+
+test204 = P.doParse fromSelectP "FROM Students"
+
+-- >>> test204
+-- Just (TableRef "Students","")
+
+test205 = P.doParse groupbySelectP ""
+
+-- >>> test205
+-- Nothing
 
 ccPrefixP :: Parser Bool
 ccPrefixP =

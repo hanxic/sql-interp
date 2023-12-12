@@ -87,8 +87,8 @@ data Expression
   | Val DValue
   | Op1 Uop Expression -- e.g. NOT A
   | Op2 Expression Bop Expression -- e.g. A + 2
-  | AggFun AggFunction CountStyle Expression
-  | Fun Function Expression -- e.g. SUM / AVG
+  | AggFun AggFunction CountStyle Expression -- e.g. SUM / AVG
+  | Fun Function Expression
   deriving (Eq, Show)
 
 data Var

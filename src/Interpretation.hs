@@ -34,7 +34,7 @@ import TableSyntax
     Table (..),
     TableData,
   )
-import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
+import Test.HUnit (Counts, Test (..), assertFailure, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
 import Text.Printf (FieldFormat (FieldFormat))
@@ -270,15 +270,63 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             else throwAliases var1 var2
 
 evalQuery :: Query -> SQLI ()
-evalQuery (SelectQuery q) = evalSelectCommand q
+evalQuery (SelectQuery q) = undefined {- evalSelectCommand q -}
 evalQuery (DeleteQuery q) = evalDeleteCommand q
 
-evalSelectCommand :: SelectCommand -> SQLI ()
+evalSelectCommand :: SelectCommand -> SQLI Table
 evalSelectCommand q = do
   tableFrom <- evalFrom (fromSelect q)
   tableWhere <- evalWhere (whSelect q) tableFrom
-  tableGroupBy <- evalGroupBy (groupbySelect q) tableWhere
-  undefined
+  tableGroupBy <- evalGroupBySelect (groupbySelect q) (exprsSelect q) tableWhere
+  tableOrder <- evalOrderBy (orderbySelect q) tableGroupBy
+  tableOffset <- evalOffset (offsetSelect q) tableOrder
+  evalLimit (limitSelect q) tableOffset
+
+{-   tableGroupBy <- evalGroupBySelect (groupbySelect q) (exprsSelect q) tableWhere
+  tableOffset <- evalOffset (offsetSelect q) tableGroupBy
+  evalLimit (limitSelect q) tableOffset -}
+
+tSC :: String -> Store -> Table -> Test
+tSC commandStr store table =
+  case PAR.parse SPAR.scP commandStr of
+    Left errorMsg -> TestCase (assertFailure errorMsg)
+    Right sc -> interp (evalSelectCommand sc) store ~?= Right table
+
+tStudentStar :: Test
+tStudentStar =
+  let selectCommandTxt = "SELECT *\nFROM Students"
+   in tSC selectCommandTxt sampleStore tableSampleStudents
+
+test201 = PAR.parse SPAR.scP "SELECT *\nFROM Students"
+
+-- >>> test201
+-- Right (SelectCommand {exprsSelect = (All,[AllVar]), fromSelect = TableRef "Students", whSelect = Nothing, groupbySelect = [], orderbySelect = [], limitSelect = Nothing, offsetSelect = Nothing})
+
+test301 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32)],
+      indexName = [(VarName "first_name", StringType 255), (VarName "last_name", StringType 255), (VarName "gender", StringType 255), (VarName "age", IntType 32)],
+      tableData =
+        [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1)],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2)],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3)],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4)],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5)]
+        ]
+    }
+
+test302 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32)],
+      indexName = [(VarName "first_name", StringType 255), (VarName "last_name", StringType 255), (VarName "gender", StringType 255), (VarName "age", IntType 32)],
+      tableData =
+        [ fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5)],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4)],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3)],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2)],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1)]
+        ]
+    }
 
 evalDeleteCommand :: DeleteCommand -> SQLI ()
 evalDeleteCommand = undefined
@@ -451,13 +499,12 @@ evalLimit Nothing td = return td
 evalLimit (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.take i $ tableData table)
 evalLimit _ _ = throwError "Limit cannot be negative"
 
-evalSelectExpr :: (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI (TableName, Table)
-evalSelectExpr = undefined
-
-evalOrderBy :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> TableData -> SQLI TableData
-evalOrderBy orders td = do
+evalOrderBy :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> Table -> SQLI Table
+evalOrderBy [] table = return table
+evalOrderBy orders (Table pk iName td) = do
   ordering <- getOrdering orders
-  evalSort ordering td
+  sortedTD <- evalSort ordering td
+  return $ Table pk iName sortedTD
 
 evalSort :: (Row -> Row -> Ordering) -> TableData -> SQLI TableData
 evalSort ordering td = return $ List.sortBy ordering td
@@ -467,12 +514,12 @@ sort on the first variable, and group by -> repeatedly sort on the second and gr
 
 -}
 getOrdering :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
-getOrdering = foldrM decideOrdering (const $ const LT)
+getOrdering = foldrM decideOrdering (const $ const LT) -- will not happen
 
 test_evalOrderBy :: Test
 test_evalOrderBy =
   TestList
-    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] (tableData tableSampleStudents)) sampleStore ~?= Right (reverse (tableData tableSampleStudents))
+    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] (tableSampleStudents)) sampleStore ~?= Right (Table (primaryKeys tableSampleStudents) (indexName tableSampleStudents) (reverse $ tableData tableSampleStudents))
     ]
 
 {- foldrM (\(v, mad, mfl) acc -> normalizeSort x acc) undefined undefined -}
@@ -508,25 +555,51 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
           EQ -> accF r1 r2
           o -> o
 
-evalGroupBy :: [Var] -> (TableName, Table) -> SQLI [[Row]]
-evalGroupBy vars (tn, Table pk iName td) = do
+hasAggFun :: [ColumnExpression] -> Bool
+hasAggFun = List.foldr (\x acc -> acc || hasAggFunCol x) False
+  where
+    hasAggFunCol :: ColumnExpression -> Bool
+    hasAggFunCol (ColumnName expr) = hasAggFunExpr expr
+    hasAggFunCol (ColumnAlias expr _) = hasAggFunExpr expr
+    hasAggFunCol AllVar = False
+
+hasAggFunExpr :: Expression -> Bool
+hasAggFunExpr (AggFun {}) = True
+hasAggFunExpr (Op1 _ expr) = hasAggFunExpr expr
+hasAggFunExpr (Op2 expr1 _ expr2) = hasAggFunExpr expr1 || hasAggFunExpr expr2
+hasAggFunExpr (Fun _ expr) = hasAggFunExpr expr
+hasAggFunExpr _ = False
+
+evalGroupBySelect :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
+evalGroupBySelect [] (cs, ce) (tn, Table pk iName td) =
+  let rowGroups = if hasAggFun ce then [td] else List.map (: []) td
+   in evalSelectRowGroups (cs, ce) tn pk iName rowGroups
+evalGroupBySelect vars selectParams (tn, Table pk iName td) = do
   ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
   td <- evalSort ordering td
-  return $ List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
+  let rowGroups = List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
+   in evalSelectRowGroups selectParams tn pk iName rowGroups
 
 {-
 Steps for select
 1. For each group, do the following
   1.1. If it is aggregate, then do it with that group
   1.2. Otherwise, only select the first one
+2. Need to regroup pk and iName
 
 -}
 
-evalSelect :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
-evalSelect (cs, ce) tn pk iName rowGroups =
+{-
+Still need to do
+  1. Select DISTINCT
+  2. renaming
+-}
+
+evalSelectRowGroups :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelectRowGroups (cs, ce) tn pk iName rowGroups =
   Table pk iName
-    <$> foldM
-      (\acc x -> evalSelectAux ce pk iName x >>= (\y -> return (y : acc)))
+    <$> foldrM
+      (\x acc -> evalSelectAux ce pk iName x >>= (\y -> return (y : acc)))
       []
       rowGroups
   where
