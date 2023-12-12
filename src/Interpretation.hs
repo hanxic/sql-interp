@@ -430,17 +430,20 @@ evalLimit _ _ = throwError "Limit cannot be negative"
 evalSelectExpr :: [(CountStyle, ColumnExpression)] -> (TableName, Table) -> SQLI (TableName, Table)
 evalSelectExpr = undefined
 
-evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> TableData -> SQLI TableData
-evalSort orders td = do
-  ordering <- normalizeSort orders
-  return $ List.sortBy ordering td
+evalOrderBy :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> TableData -> SQLI TableData
+evalOrderBy orders td = do
+  ordering <- getOrdering orders
+  evalSort ordering td
+
+evalSort :: (Row -> Row -> Ordering) -> TableData -> SQLI TableData
+evalSort ordering td = return $ List.sortBy ordering td
 
 {-
 sort on the first variable, and group by -> repeatedly sort on the second and group by
 
 -}
-normalizeSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
-normalizeSort = foldrM decideOrdering (const $ const LT)
+getOrdering :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
+getOrdering = foldrM decideOrdering (const $ const LT)
 
 {- foldrM (\(v, mad, mfl) acc -> normalizeSort x acc) undefined undefined -}
 
@@ -475,8 +478,21 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
           EQ -> accF r1 r2
           o -> o
 
-evalGroupBy :: [Var] -> (TableName, Table) -> SQLI (TableName, Table)
-evalGroupBy = undefined
+evalGroupBy :: [Var] -> (TableName, Table) -> SQLI [[Row]]
+evalGroupBy vars (tn, Table pk iName td) = do
+  ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
+  td <- evalSort ordering td
+  return $ List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
+
+-- Basically an eval expression and return a dvalue -> Do this for every columm
+{-
+1. Evaluate the expression, inside aggregation
+2. Maybe need a fake aggfunction called same
+3. Basically need to find the elements in each expression and create a newer one
+4. Optimizing
+-}
+
+{-Given groupby returns an [[Row]], need information for -}
 
 {- compare :: DValue -> DValue -> Ordering
 compare (NullVal) _ = GT -}
@@ -802,6 +818,33 @@ lengthGroupBy (MultiGroupBy _ vs) = 1 + lengthGroupBy vs
 
 test1000 = interp (evalFrom (Join (TableRef "Students") InnerJoin (TableRef "Grades") [(Dot "Students" (VarName "student_id"), Dot "Grades" (VarName "student_id"))])) sampleStore
 
+test1003 = TP.pretty test1002
+
+test1004 = putStrLn test1003
+
+test1002 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
+      indexName = [(VarName "age", IntType 32), (VarName "first_name", StringType 255), (VarName "gender", StringType 255), (VarName "grade", IntType 32), (VarName "last_name", StringType 255)],
+      tableData =
+        [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 95), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 84), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 90), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 86), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 80), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "History")]
+        ]
+    }
+
 test1001 =
   Table
     { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
@@ -825,7 +868,7 @@ test1001 =
         ]
     }
 
-test1002 = TP.pretty test1001
+{- test1002 = TP.pretty test1001 -}
 
 -- >>> test1002
 -- "student_id,subject,age,first_name,gender,grade,last_name\n1,Math,20,John,Male,85,Doe\n1,English,20,John,Male,78,Doe\n1,History,20,John,Male,92,Doe\n2,Math,21,Jane,Female,92,Smith\n2,English,21,Jane,Female,88,Smith\n2,History,21,Jane,Female,76,Smith\n3,Math,22,Michael,Male,78,Johnson\n3,English,22,Michael,Male,95,Johnson\n3,History,22,Michael,Male,84,Johnson\n4,Math,20,Emily,Female,90,Williams\n4,English,20,Emily,Female,85,Williams\n4,History,20,Emily,Female,88,Williams\n5,Math,23,Chris,Male,86,Anderson\n5,English,23,Chris,Male,92,Anderson\n5,History,23,Chris,Male,80,Anderson"

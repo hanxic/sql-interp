@@ -271,3 +271,23 @@ qc = do
   QC.quickCheck prop_roundtrip_row
   putStrLn "roundtrip_table"
   QC.quickCheck prop_roundtrip_table
+
+test1 =
+  ( NE.fromList [(VarName "var0", StringType 177)],
+    [ (VarName "var1", BoolType),
+      (VarName "var3", IntType 15),
+      (VarName "var7", StringType 61),
+      (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntType 4),
+      (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolType),
+      (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntType 14)
+    ]
+  )
+
+test2 =
+  [ fromList [(VarName "var0", StringVal ".e>Po1?>"), (VarName "var1", BoolVal False), (VarName "var3", IntVal 21762), (VarName "var7", StringVal "+>IeGT+?{jhg6y12XlnAqi<D%za1&Ig"), (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntVal 2), (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolVal False), (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntVal 4685)],
+    fromList [(VarName "var0", StringVal "J|sY^?\fM9q%^!6BP\tc+_q344"), (VarName "var1", BoolVal True), (VarName "var3", IntVal 4414), (VarName "var7", NullVal), (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntVal 1), (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolVal False), (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntVal 1288)],
+    fromList [(VarName "var0", StringVal "J~-\f*zYKcCe6P^l/c4\\4#}M|\v2ck</y&l_"), (VarName "var1", BoolVal True), (VarName "var3", IntVal 6810), (VarName "var7", StringVal "[NkQ uv[1GFt^"), (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntVal 13), (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolVal True), (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntVal 13641)],
+    fromList [(VarName "var0", StringVal "p[\t|R%^OpFN\tjb^hOv@r0G0>zlX r.{vHv3*l*pGZaj"), (VarName "var1", BoolVal False), (VarName "var3", IntVal 11479), (VarName "var7", StringVal "#r<1ZXUF\rVl#3:uKnt?J,c}I"), (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntVal 15), (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolVal True), (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntVal 3615)],
+    fromList [(VarName "var0", StringVal ""), (VarName "var1", BoolVal True), (VarName "var3", IntVal 11381), (VarName "var7", StringVal "lBmgz.M&|OF>OsSV?N^%"), (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntVal 3), (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolVal False), (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntVal 10188)],
+    fromList [(VarName "var0", StringVal "2P0+njt>mis?.T-nT4{R?LU\\Lrj&i*NB%C"), (VarName "var1", BoolVal False), (VarName "var3", IntVal 1628), (VarName "var7", StringVal "!|a%xBb5V%I9YX/RGJD_+%7a$giEBF}p,q_"), (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))), IntVal 9), (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1")))), BoolVal False), (Dot "table63" (Dot "table31" (Dot "table15" (Dot "table7" (Dot "table3" (VarName "var1"))))), IntVal 9178)]
+  ]
