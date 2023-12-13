@@ -38,8 +38,9 @@ import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
 import Text.Printf (FieldFormat (FieldFormat))
 import Text.Read (readMaybe)
-import Text.Regex.Base qualified as REGEX
-import Text.Regex.Posix qualified as POSIX ((=~))
+
+-- import Text.Regex.Base qualified as REGEX
+-- import Text.Regex.Posix qualified as POSIX ((=~))
 
 {- import Test.QuickCheck.Monadic qualified as QCM -}
 
@@ -155,8 +156,8 @@ interp = S.evalState . runExceptT
 
 test_evalFrom :: Test
 test_evalFrom =
-  "evaluate From" ~:
-    TestList
+  "evaluate From"
+    ~: TestList
       [ interp (evalFrom (TableRef "Students")) sampleStore ~?= Right ("Students", tableSampleStudents),
         interp (evalFrom (TableRef "bla")) sampleStore ~?= Left "No Table for table reference: bla",
         interp (evalFrom (TableAlias "Students" "Student1")) sampleStore ~?= Right ("Student1", tableSampleStudents),
