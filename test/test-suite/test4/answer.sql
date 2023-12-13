@@ -1,0 +1,4 @@
+CREATE TABLE answer
+(
+  "COUNT(order_id)" INTEGER PRIMARY KEY
+);
