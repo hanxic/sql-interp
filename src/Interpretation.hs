@@ -2,12 +2,13 @@
 
 module Interpretation where
 
+{- import Data.Bits (Bits (bitSize), FiniteBits (finiteBitSize)) -}
+
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Except (Except, ExceptT, runExceptT, throwError)
 import Control.Monad.State (State, get, put, runState)
 import Control.Monad.State qualified as S
-{- import Data.Bits (Bits (bitSize), FiniteBits (finiteBitSize)) -}
-
 import Data.Char (toLower, toUpper)
 import Data.Foldable (foldrM)
 import Data.Function ((&))
@@ -15,7 +16,7 @@ import Data.Functor ((<&>))
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, maybeToList)
 import GenSQL qualified as GSQL
 import Parser qualified as PAR
 import SQLParser qualified as SPAR
@@ -41,6 +42,7 @@ import Text.Printf (FieldFormat (FieldFormat))
 import Text.Read (readMaybe)
 import Text.Regex.Base qualified as REGEX
 import Text.Regex.Posix qualified as POSIX ((=~))
+import Utils
 
 {- import Test.QuickCheck.Monadic qualified as QCM -}
 
@@ -577,15 +579,36 @@ hasAggFunExpr (Op2 expr1 _ expr2) = hasAggFunExpr expr1 || hasAggFunExpr expr2
 hasAggFunExpr (Fun _ expr) = hasAggFunExpr expr
 hasAggFunExpr _ = False
 
+evalGroupBySelectPKIN :: Maybe Var -> [ColumnExpression] -> PrimaryKeys -> IndexName -> SQLI (PrimaryKeys, IndexName)
+evalGroupBySelectPKIN fstGroup ces pk iName =
+  case deterPK fstGroup ces pk of
+    Nothing -> throwError "No primary key is valid"
+    Just pks ->
+      let newTypeMap = extractAH ces pk iName
+       in let pkMap = Map.fromList $ NE.toList pks
+           in let newIName =
+                    Map.foldrWithKey
+                      ( \var dtype acc ->
+                          if var `notMember` pkMap
+                            then (var, dtype) : acc
+                            else acc
+                      )
+                      []
+                      newTypeMap
+               in return (pks, newIName)
+
 evalGroupBySelect :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
-evalGroupBySelect [] (cs, ce) (tn, Table pk iName td) =
-  let rowGroups = if hasAggFun ce then [td] else List.map (: []) td
-   in evalSelectRowGroups (cs, ce) tn pk iName rowGroups
-evalGroupBySelect vars selectParams (tn, Table pk iName td) = do
+evalGroupBySelect [] (cs, ces) (tn, Table pk iName td) =
+  let rowGroups = if hasAggFun ces then [td] else List.map (: []) td
+   in do
+        (newPK, newIName) <- evalGroupBySelectPKIN Nothing ces pk iName
+        evalSelectRowGroups (cs, ces) tn pk iName newPK newIName rowGroups
+evalGroupBySelect vars selectParams@(_, ces) (tn, Table pk iName td) = do
+  (newPK, newIName) <- evalGroupBySelectPKIN Nothing ces pk iName
   ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
   td <- evalSort ordering td
   let rowGroups = List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
-   in evalSelectRowGroups selectParams tn pk iName rowGroups
+   in evalSelectRowGroups selectParams tn pk iName newPK newIName rowGroups
 
 {-
 Steps for select
@@ -602,9 +625,68 @@ Still need to do
   2. renaming
 -}
 
-evalSelectRowGroups :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
-evalSelectRowGroups (cs, ce) tn pk iName rowGroups =
-  Table pk iName
+{-
+How can primary keys exists
+1. If the first level variables is a superset of the primary key
+2. If there exists a variable that is the first element of group by
+-}
+
+{-
+Determine primary key -> next step is to get the rest of them
+-}
+
+deterPK :: Maybe Var -> [ColumnExpression] -> PrimaryKeys -> Maybe PrimaryKeys
+deterPK fstGroup ces pk =
+  let pkMap = Map.fromList $ NE.toList pk
+   in let pospkMap = foldMap (`extractPosPK` pkMap) ces
+       in let identifiedPK = foldMap (\x -> maybeToList $ Map.lookup (fst x) pospkMap) pk
+           in if length identifiedPK == length pk
+                then Just $ NE.fromList identifiedPK
+                else (\x -> Just $ x NE.:| []) =<< flip Map.lookup pospkMap =<< fstGroup
+
+extractPosPK :: ColumnExpression -> Map Var DType -> Map Var (Var, DType)
+extractPosPK AllVar typeMap = Map.mapWithKey (,) typeMap
+extractPosPK (ColumnName expr) typeMap =
+  let alias = VarName $ TP.pretty expr
+   in case extractPosPKExpr expr alias typeMap of
+        Nothing -> Map.empty
+        Just pospk -> uncurry Map.singleton pospk
+extractPosPK (ColumnAlias expr alias) pk =
+  case extractPosPKExpr expr (VarName alias) pk of
+    Nothing -> Map.empty
+    Just pospk -> uncurry Map.singleton pospk
+
+extractPosPKExpr :: Expression -> Var -> Map Var DType -> Maybe (Var, (Var, DType))
+extractPosPKExpr expr@(Var var) alias typeMap =
+  (\x -> (var, (alias, x))) <$> inferExprType expr typeMap
+extractPosPKExpr (Val _) _ _ = Nothing
+extractPosPKExpr (Op1 uop expr1) alias pk = extractPosPKExpr expr1 alias pk
+extractPosPKExpr (Op2 expr1 bop expr2) alias pk =
+  let pospk1 = extractPosPKExpr expr1 alias pk
+   in let pospk2 = extractPosPKExpr expr2 alias pk
+       in case (pospk1, pospk2) of
+            (Just _, Nothing) -> pospk1
+            (Nothing, Just _) -> pospk2
+            _ -> Nothing
+extractPosPKExpr (AggFun _ _ expr) alias pk = extractPosPKExpr expr alias pk
+extractPosPKExpr (Fun _ expr) alias pk = extractPosPKExpr expr alias pk
+
+{- extractpospkexpr expr1 -}
+extractAH :: [ColumnExpression] -> PrimaryKeys -> IndexName -> Map Var DType
+extractAH ces pk iName =
+  let ahMap = Map.fromList (NE.toList pk) `Map.union` Map.fromList iName
+   in List.foldr (\x acc -> extractAHAux x ahMap `Map.union` acc) Map.empty ces
+  where
+    extractAHAux :: ColumnExpression -> Map Var DType -> Map Var DType
+    extractAHAux AllVar ahMap = ahMap
+    extractAHAux (ColumnName expr) ahMap =
+      maybe Map.empty (Map.singleton (VarName $ TP.pretty expr)) $ inferExprType expr ahMap
+    extractAHAux (ColumnAlias expr alias) ahMap =
+      maybe Map.empty (Map.singleton (VarName $ TP.pretty alias)) $ inferExprType expr ahMap
+
+evalSelectRowGroups :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelectRowGroups (cs, ce) tn pk iName newPK newIName rowGroups =
+  Table newPK newIName
     <$> foldrM
       (\x acc -> evalSelectAux ce pk iName x >>= (\y -> return (y : acc)))
       []
@@ -772,10 +854,22 @@ evalIDCreate idcreate = do
         Right var -> return (var, dtype)
         Left _ -> throwError "Fail to parse name"
 
+test208 = [("\"COUNT(order_id)\"", IntType 16, True)]
+
+-- >>> interp (evalIDCreate test208) emptyStore
+-- Right (Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = []})
+
 evalDeleteCommand :: DeleteCommand -> SQLI Table
 evalDeleteCommand (DeleteCommand fromdelete whdelete) = do
   delScope fromdelete
   return emptyTable
+
+test105 = [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("\"COUNT(order_id)\"", IntType 16, True)]})]
+
+test106 = exec (eval test105) emptyStore
+
+-- >>> test106
+-- Store {scope = fromList [("answer",Table {primaryKeys = (VarName "\"COUNT(order_id)\"",IntType 16) :| [], indexName = [], tableData = []})], alias = fromList []}
 
 {- let pkList = List.foldr (\x acc -> parseIDCreate x) idcreate
  in let indexName = List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate in

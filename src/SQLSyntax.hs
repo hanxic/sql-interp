@@ -62,30 +62,6 @@ data JoinStyle
 
 type JoinNames = [(Var, Var)]
 
-isBase :: Expression -> Bool
-isBase Val {} = True
-isBase Var {} = True
-isBase Op1 {} = True
-isBase Fun {} = True
-isBase AggFun {} = True
-isBase _ = False
-
-level :: Bop -> Int
-level Times = 20
-level Divide = 20
-level Modulo = 20
-level Plus = 17
-level Minus = 17
-level Eq = 15
-level Gt = 15
-level Ge = 15
-level Lt = 15
-level Le = 15
-level Is = 15
-level Like = 15
-level And = 8
-level Or = 7
-
 data Expression
   = Var Var -- e.g. A
   | Val DValue
@@ -145,7 +121,7 @@ data DType
   = StringType Int
   | IntType Int
   | BoolType
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 data DValue
   = IntVal Int
@@ -153,13 +129,6 @@ data DValue
   | StringVal String
   | NullVal
   deriving (Eq, Show, Ord)
-
-dvalueTypeCheck :: DValue -> DType -> Bool
-dvalueTypeCheck NullVal _ = True
-dvalueTypeCheck (IntVal _) (IntType _) = True
-dvalueTypeCheck (BoolVal _) BoolType = True
-dvalueTypeCheck (StringVal _) (StringType _) = True
-dvalueTypeCheck _ _ = False
 
 type Name = String
 

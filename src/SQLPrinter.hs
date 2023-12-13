@@ -10,6 +10,7 @@ import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 import Text.PrettyPrint (Doc, (<+>))
 import Text.PrettyPrint qualified as PP
+import Utils
 
 class PP a where
   pp :: a -> Doc

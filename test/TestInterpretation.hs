@@ -3,6 +3,8 @@ module TestInterpretation where
 import Control.Monad (foldM)
 import Control.Monad.Except
 import Control.Monad.State
+import Data.List qualified as List (sort)
+import Data.List.NonEmpty qualified as NE (fromList, sort)
 import Data.Map qualified as Map (lookup)
 import Interpretation
 import Parser qualified as P
@@ -57,6 +59,8 @@ type Stack = Store
 data OutputLoc
   = File FilePath
   | Terminal
+
+testedit = " "
 
 getStack :: IOS Stack
 getStack = do gets stack
@@ -189,9 +193,12 @@ setupEnv answerFolder answerScript answerName = do
   runQueries
   loadTable answerFolder answerName
 
+-- >>> loadScript "./test/test-suite/test4/test4/answer.sql"
+
 -- | answerPath should be free of suffix
 runTestCase :: String -> String -> String -> String -> IOS ()
 runTestCase answerFolder answerScript answerName testScript = do
+  putStrLnIOS ("Running test " ++ answerFolder </> testScript)
   setupEnv answerFolder answerScript answerName
   loadScript (answerFolder </> testScript -<.> sqlformat)
   resultTable <- runQuery
@@ -202,7 +209,16 @@ runTestCase answerFolder answerScript answerName testScript = do
       lift $
         void
           ( runTestTT
-              (("running Test " ++ testScript) ~: (resultTable ~?= answerTable))
+              ( ("running Test " ++ testScript) ~:
+                  Table
+                    (NE.sort $ primaryKeys resultTable)
+                    (List.sort $ indexName resultTable)
+                    (tableData resultTable)
+                    ~?= Table
+                      (NE.sort $ primaryKeys answerTable)
+                      (List.sort $ indexName answerTable)
+                      (tableData answerTable)
+              )
           )
 
 {- loadTestCases :: IOS ()
@@ -215,10 +231,36 @@ runTestCases = do
 
 {- setupEnv (testPath </> "test1") "answer" "answer" -}
 
-test103 = SPAR.parseSQLFile (testPath </> "test1" </> "test1" -<.> sqlformat)
+test103 = SPAR.parseSQLFile (testPath </> "test3" </> "test3" -<.> sqlformat)
+
+test104 = SPAR.parseSQLFile (testPath </> "test4" </> "answer" -<.> sqlformat)
+
+-- >>> test104
+-- Right [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("\"COUNT(order_id)\"",IntType 16,True)]})]
+
+test109 = [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("\"COUNT(order_id)\"", IntType 16, True)]})]
+
+test108 = exec (eval test109) emptyStore
+
+-- >>> test108
+-- Store {scope = fromList [("answer",Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = []})], alias = fromList []}
+
+test107 = TPAR.parseCSVFile (NE.fromList [(VarName "order_id", IntType 16)]) [(VarName "amount + 5", IntType 16), (VarName "customer_id", IntType 16)] (testPath </> "test5" </> "answer" -<.> sqlformat)
+
+-- >>> test107
+-- Left "No parses"
 
 -- loadTest
-testcases = map (\(x1, x2, x3, x4) -> (testPath </> x1, x2, x3, x4)) [("test1", "answer", "answer", "test1")]
+testcases :: [(FilePath, String, String, String)]
+testcases =
+  map
+    (\(x1, x2, x3, x4) -> (testPath </> x1, x2, x3, x4))
+    [ ("test1", "answer", "answer", "test1"),
+      ("test2", "answer", "answer", "test2"),
+      ("test3", "answer", "answer", "test3"),
+      ("test4", "answer", "answer", "test4"),
+      ("test5", "answer", "answer", "test5")
+    ]
 
 {- loadSetupFile :: IO (Maybe Queries)
 loadSetupFile = do

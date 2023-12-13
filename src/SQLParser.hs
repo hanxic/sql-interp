@@ -13,6 +13,7 @@ import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Text.ParserCombinators.ReadP (count)
 import Text.PrettyPrint (render)
+import Utils
 
 errorMsgUnitTest :: Either String b
 errorMsgUnitTest = Left "No parses"
@@ -261,7 +262,7 @@ starP :: Parser ColumnExpression
 starP = AllVar <$ wsP (P.string "*")
 
 nameP :: Parser String
-nameP = P.filter isValidName (wsP $ some baseP)
+nameP = P.filter isValidName (wsP (some baseP <|> (\s -> "\"" ++ s ++ "\"") <$> stringInP '\"' many))
   where
     baseP :: Parser Char
     baseP = P.choice [P.alpha, P.digit, P.underscore]
@@ -273,6 +274,7 @@ varP :: Parser Var
 varP =
   wsP
     ( (Dot <$> pFVarName <*> (P.char '.' *> varP))
+        <|> (VarName <$> wsP (stringInP '\"' many))
         <|> (VarName <$> pFVarName)
         -- String name for column should be not empty)
     )
@@ -292,7 +294,7 @@ test_varP =
     [ P.parse varP "*" ~?= errorMsgUnitTest,
       P.parse varP "1st" ~?= errorMsgUnitTest,
       P.parse varP "st1" ~?= Right (VarName "st1"),
-      P.parse varP "\"\"" ~?= errorMsgUnitTest,
+      P.parse varP "\"\"" ~?= Right (VarName ""),
       -- TODO: not dealing with "\t" here. Maybe we should?
       P.parse varP "st.st1" ~?= Right (Dot "st" $ VarName "st1")
     ]
@@ -737,6 +739,8 @@ idCreateP =
     <*> dTypeP
     <*> (True <$ pWords ["PRIMARY", "KEY"] <|> pure False)
 
+test102 = "CREATE TABLE answer\n(\norder_id INTEGER PRIMARY KEY,\n\"amount + 5\" INTEGER,\ncustomer_id INTEGER\n);"
+
 test_idCreateP :: Test
 test_idCreateP =
   TestList
@@ -747,6 +751,18 @@ test_idCreateP =
 
 ccP :: Parser CreateCommand
 ccP = CreateCommand <$> ccPrefixP <*> nameP <*> parens (P.sepBy1 idCreateP P.comma)
+
+test103 = P.doParse sqlP test102
+
+test104 = "\"amount + 5\" INTEGER,\ncustomer_id INTEGER\n"
+
+test105 = P.doParse idCreateP test104
+
+-- >>> test105
+-- Just (("amount + 5",IntType 16,False),",\ncustomer_id INTEGER\n")
+
+-- >>> test103
+-- Just ([CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("order_id",IntType 16,True),("amount + 5",IntType 16,False),("customer_id",IntType 16,False)]})],"")
 
 test_ccP :: Test
 test_ccP =
@@ -767,7 +783,7 @@ sqlP :: Parser Queries
 sqlP = many (queryP <* wsP (P.char ';'))
 
 parseSQLFile :: String -> IO (Either P.ParseError Queries)
-parseSQLFile = P.parseFromFile (const <$> sqlP <*> P.eof)
+parseSQLFile = P.parseFromFile (sqlP <* P.eof)
 
 test_sqlP :: Test
 test_sqlP =
@@ -823,18 +839,6 @@ test_all =
         test_ccP,
         test_sqlP
       ]
-
-test102 = [DeleteQuery (DeleteCommand {fromDelete = "Table0", whDelete = Nothing})]
-
-test103 = SPP.printQueries test102
-
--- >>> test103
--- "DELETE FROM Table0;"
-
-test104 = P.doParse sqlP test103
-
--- >>> test104
--- Just ([DeleteQuery (DeleteCommand {fromDelete = "Table0", whDelete = Nothing})],"")
 
 qc :: IO ()
 qc = do
