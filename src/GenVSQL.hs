@@ -1,14 +1,17 @@
+{-# LANGUAGE GADTs #-}
+
 module GenVSQL where
 
-import Control.Monad (liftM2, liftM3, mapM_, replicateM)
-import Control.Monad.State (MonadState (..), State, StateT, runState, runStateT)
+import Control.Monad
+import Control.Monad.State qualified as S
 import Data.Map (Map)
 import Data.Map qualified as Map
 import SQLSyntax
 import TableSyntax
 import Test.HUnit
-import Test.QuickCheck (Arbitrary (..), Gen)
+import Test.QuickCheck
 import Test.QuickCheck qualified as QC
+import Test.QuickCheck.Gen
 
 data GenState = GenState
   { numVar :: Int,
@@ -16,7 +19,16 @@ data GenState = GenState
     genStore :: Map Name Table
   }
 
-data GenV t = StateT GenState (Gen t)
+type GenV t = S.StateT GenState Gen t
+
+{- instance Monad GenV where
+  return :: a -> GenV a
+  return = return
+ -}
+getVarCount :: GenV Int
+getVarCount = do
+  genState <- S.get
+  return $ numVar genState
 
 class ArbitraryV a where
   arbitraryV :: GenV a

@@ -23,8 +23,10 @@ import Text.PrettyPrint (Doc, render)
 prop_roundtrip_header :: Header -> Bool
 prop_roundtrip_header h = P.parse headerP (Text.PrettyPrint.render $ TP.ppHeader h) == Right h
 
-prop_roundtrip_valT :: DValue -> Bool
-prop_roundtrip_valT v = P.parse dvalueTP (TP.pretty v) == Right v
+prop_roundtrip_valT :: QC.Property
+prop_roundtrip_valT = QC.forAll (QC.arbitrary :: QC.Gen DType) $ \dtype ->
+  QC.forAll (genValTC dtype) $ \dvalue ->
+    P.parse (dvalueTP dtype) (TP.pretty dvalue) == Right dvalue
 
 {- prop_roundtrip_row :: AnnotatedHeader -> Bool
 prop_roundtrip_row ah =
@@ -42,12 +44,44 @@ prop_roundtrip_table = QC.forAll genPKIN $ \(pk, iName) ->
         let table = Table pk iName td
          in P.parse (tableP pk iName) (TP.pretty table) == Right table
 
-{- P.parse tableP (TP.pretty t) == Right t -}
-
 type PrimaryKeysList = IndexName
 
+nameTP :: Parser String
+nameTP = P.filter isValidName (some baseP <* spacesP)
+  where
+    baseP :: Parser Char
+    baseP = P.choice [P.alpha, P.digit, P.underscore]
+    isValidName :: String -> Bool
+    isValidName [] = True
+    isValidName str@(x : _) = notElem str reservedKeyWords && not (Char.isDigit x)
+
+varTP :: Parser Var
+varTP =
+  (Dot <$> tpFVarName <*> (P.char '.' *> varTP)) <* spacesP
+    <|> (VarName <$> tpFVarName)
+
+tpFVarName :: Parser String
+tpFVarName =
+  P.filter
+    (`notElem` reservedKeyWords)
+    nameTP
+
+test_varTP :: Test
+test_varTP =
+  TestList
+    [ P.parse varTP "*" ~?= SP.errorMsgUnitTest,
+      P.parse varTP "1st" ~?= SP.errorMsgUnitTest,
+      P.parse varTP "st1" ~?= Right (VarName "st1"),
+      P.parse varTP "\"\"" ~?= SP.errorMsgUnitTest,
+      -- TODO: not dealing with "\t" here. Maybe we should?
+      P.parse varTP "st.st1" ~?= Right (Dot "st" $ VarName "st1"),
+      P.doParse varTP "st\n.st1" ~?= Just (VarName "st", "\n.st1")
+    ]
+
+-- String name for column should be not empty)
+
 headerP :: Parser Header
-headerP = P.sepBy SP.varP P.comma
+headerP = P.sepBy varTP P.comma
 
 test_headerP :: Test
 test_headerP =
@@ -142,8 +176,12 @@ test_boolValTP =
 intValTP :: Parser DValue
 intValTP = IntVal <$> P.int
 
-dvalueTP :: Parser DValue
-dvalueTP = (intValTP <* separatorP) <|> (boolValTP <* separatorP) <|> nullValTP <|> stringValTP
+dvalueTP :: DType -> Parser DValue
+dvalueTP (IntType i) = (intValTP <* separatorP) <|> nullValTP
+dvalueTP BoolType = (boolValTP <* separatorP) <|> nullValTP
+dvalueTP (StringType n) = nullValTP <|> (stringValTP <* separatorP)
+
+{- (intValTP <* separatorP) <|> (boolValTP <* separatorP) <|> nullValTP <|> stringValTP -}
 
 {- case dtype of
   IntType i -> P.intValP <* separatorP <|> nullValTP
@@ -162,7 +200,7 @@ separatorP = void (P.lookAhead (P.space <|> P.comma)) <|> P.lookAhead P.eof
 test_dvalueTP :: Test
 test_dvalueTP =
   TestList
-    [ P.parse dvalueTP "\"a\"" ~?= Right (StringVal "a")
+    [ P.parse (dvalueTP (StringType 255)) "\"a\"" ~?= Right (StringVal "a")
     ]
 
 validHeaderP :: PrimaryKeys -> IndexName -> Parser AnnotatedHeader
@@ -173,19 +211,20 @@ validHeaderPAux pk iName header =
   if not $ checkRepetitive header && length header == length pk + length iName
     then maybe Control.Applicative.empty return (annotateHeaderMaybe pk iName header)
     else Control.Applicative.empty
-  where
-    annotateHeaderMaybe :: PrimaryKeys -> IndexName -> Header -> Maybe AnnotatedHeader
-    annotateHeaderMaybe pk iName header =
-      let pkList = NE.toList pk
-       in foldr (\x acc -> (:) <$> annotateColumnMaybe pkList iName x <*> acc) (Just []) header
-    annotateColumnMaybe :: [(Var, DType)] -> [(Var, DType)] -> Var -> Maybe (Var, DType)
-    annotateColumnMaybe pkList iName headerVar =
-      case lookup headerVar pkList of
-        Just dtyp -> Just (headerVar, dtyp)
-        Nothing ->
-          case lookup headerVar iName of
-            Just dtyp2 -> Just (headerVar, dtyp2)
-            Nothing -> Nothing
+
+annotateHeaderMaybe :: PrimaryKeys -> IndexName -> Header -> Maybe AnnotatedHeader
+annotateHeaderMaybe pk iName header =
+  let pkList = NE.toList pk
+   in foldr (\x acc -> (:) <$> annotateColumnMaybe pkList iName x <*> acc) (Just []) header
+
+annotateColumnMaybe :: [(Var, DType)] -> [(Var, DType)] -> Var -> Maybe (Var, DType)
+annotateColumnMaybe pkList iName headerVar =
+  case lookup headerVar pkList of
+    Just dtyp -> Just (headerVar, dtyp)
+    Nothing ->
+      case lookup headerVar iName of
+        Just dtyp2 -> Just (headerVar, dtyp2)
+        Nothing -> Nothing
 
 {- let pkVarList = map fst pk in
    let iNameVarList = map fst iName
@@ -223,9 +262,9 @@ rowPAux :: AnnotatedHeader -> Row -> Parser Row
 rowPAux ah row =
   case ah of
     [] -> row <$ some spacesP
-    [x@(_, dtype)] -> validValP x row =<< (dvalueTP <* spacesP <* P.lookAhead (void newLineP <|> P.eof))
+    [x@(_, dtype)] -> validValP x row =<< (dvalueTP dtype <* spacesP <* P.lookAhead (void newLineP <|> P.eof))
     (x@(_, dtype) : xs) -> do
-      dvalue <- dvalueTP <* SP.wsP P.comma
+      dvalue <- dvalueTP dtype <* SP.wsP P.comma
       row' <- validValP x row dvalue
       rowPAux xs row'
   where
@@ -246,7 +285,7 @@ test = Char.isSpace
 
 tableP :: PrimaryKeys -> IndexName -> Parser Table
 tableP pk iName = do
-  ah <- validHeaderP pk iName
+  ah <- SP.wsP (validHeaderP pk iName)
   tableData <- ([] <$ (many P.space *> P.eof)) <|> P.sepBy (rowP ah <* spacesP) newLineP
   return (Table pk iName tableData)
 
@@ -264,10 +303,10 @@ test_all =
 qc :: IO ()
 qc = do
   putStrLn "roundtrip_header"
-  QC.quickCheck prop_roundtrip_header
+  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_header
   putStrLn "roundtrip_valT"
-  QC.quickCheck prop_roundtrip_valT
+  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_valT
   putStrLn "roundtrip_row"
-  QC.quickCheck prop_roundtrip_row
+  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_row
   putStrLn "roundtrip_table"
-  QC.quickCheck prop_roundtrip_table
+  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_table

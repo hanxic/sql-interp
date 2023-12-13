@@ -15,7 +15,7 @@ import Data.Functor ((<&>))
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 import GenSQL qualified as GSQL
 import Parser qualified as PAR
 import SQLParser qualified as SPAR
@@ -25,6 +25,7 @@ import TableParser qualified as TPAR
 import TablePrinter qualified as TP
 import TableSyntax
   ( ErrorMsg,
+    IndexAttribute (PrimaryKey),
     IndexName,
     PrimaryKeys,
     Row,
@@ -33,7 +34,7 @@ import TableSyntax
     Table (..),
     TableData,
   )
-import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
+import Test.HUnit (Counts, Test (..), assertFailure, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
 import Text.Printf (FieldFormat (FieldFormat))
@@ -161,6 +162,7 @@ test_evalFrom =
       [ interp (evalFrom (TableRef "Students")) sampleStore ~?= Right ("Students", tableSampleStudents),
         interp (evalFrom (TableRef "bla")) sampleStore ~?= Left "No Table for table reference: bla",
         interp (evalFrom (TableAlias "Students" "Student1")) sampleStore ~?= Right ("Student1", tableSampleStudents),
+        S.execState (runExceptT (evalFrom (TableAlias "Students" "Student1"))) sampleStore ~?= Store (scope sampleStore) (alias sampleStore `Map.union` Map.singleton "Student1" "Students"),
         interp (evalFrom (TableAlias "bla" "Student1")) sampleStore ~?= Left "No Table for table alias: bla AS Student1"
       ]
 
@@ -268,25 +270,64 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             then return $ \row1 row2 -> Map.lookup jo2 row1 == Map.lookup jo1 row2
             else throwAliases var1 var2
 
-evalSelect :: SelectCommand -> SQLI ()
-evalSelect (SelectCommand expS fS whS gbS oS lS ofS) = do
-  tnTableFrom <- evalFrom fS
-  tnTableWhere <- evalWhere whS tnTableFrom
-  undefined
-
 evalQuery :: Query -> SQLI ()
-evalQuery (SelectQuery q) = evalSelectCommand q
+evalQuery (SelectQuery q) = undefined {- evalSelectCommand q -}
 evalQuery (DeleteQuery q) = evalDeleteCommand q
 
-evalSelectCommand :: SelectCommand -> SQLI ()
+evalSelectCommand :: SelectCommand -> SQLI Table
 evalSelectCommand q = do
   tableFrom <- evalFrom (fromSelect q)
   tableWhere <- evalWhere (whSelect q) tableFrom
-  tableExpr <- evalSelectExpr (exprsSelect q) tableWhere
-  undefined
+  tableGroupBy <- evalGroupBySelect (groupbySelect q) (exprsSelect q) tableWhere
+  tableOrder <- evalOrderBy (orderbySelect q) tableGroupBy
+  tableOffset <- evalOffset (offsetSelect q) tableOrder
+  evalLimit (limitSelect q) tableOffset
 
-evalDeleteCommand :: DeleteCommand -> SQLI ()
-evalDeleteCommand = undefined
+{-   tableGroupBy <- evalGroupBySelect (groupbySelect q) (exprsSelect q) tableWhere
+  tableOffset <- evalOffset (offsetSelect q) tableGroupBy
+  evalLimit (limitSelect q) tableOffset -}
+
+tSC :: String -> Store -> Table -> Test
+tSC commandStr store table =
+  case PAR.parse SPAR.scP commandStr of
+    Left errorMsg -> TestCase (assertFailure errorMsg)
+    Right sc -> interp (evalSelectCommand sc) store ~?= Right table
+
+tStudentStar :: Test
+tStudentStar =
+  let selectCommandTxt = "SELECT *\nFROM Students"
+   in tSC selectCommandTxt sampleStore tableSampleStudents
+
+test201 = PAR.parse SPAR.scP "SELECT *\nFROM Students"
+
+-- >>> test201
+-- Right (SelectCommand {exprsSelect = (All,[AllVar]), fromSelect = TableRef "Students", whSelect = Nothing, groupbySelect = [], orderbySelect = [], limitSelect = Nothing, offsetSelect = Nothing})
+
+test301 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32)],
+      indexName = [(VarName "first_name", StringType 255), (VarName "last_name", StringType 255), (VarName "gender", StringType 255), (VarName "age", IntType 32)],
+      tableData =
+        [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1)],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2)],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3)],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4)],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5)]
+        ]
+    }
+
+test302 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32)],
+      indexName = [(VarName "first_name", StringType 255), (VarName "last_name", StringType 255), (VarName "gender", StringType 255), (VarName "age", IntType 32)],
+      tableData =
+        [ fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5)],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4)],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3)],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2)],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1)]
+        ]
+    }
 
 evalWhere :: Maybe Expression -> (TableName, Table) -> SQLI (TableName, Table)
 evalWhere Nothing (tn, table) = return (tn, table)
@@ -315,7 +356,11 @@ evalEAgg (AggFun aggfun cs expr) td = do
   Val <$> evalEAggAux aggfun cs expr' td
   where
     evalEAggAux :: AggFunction -> CountStyle -> Expression -> TableData -> SQLI DValue
-    evalEAggAux Sum _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc >>= (\i2 -> return $ IntVal (i1 + i2)))) (IntVal 0) td
+    evalEAggAux Sum _ expr td =
+      foldM
+        (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc >>= (\i2 -> return $ IntVal (i1 + i2))))
+        (IntVal 0)
+        td
     evalEAggAux Count _ expr td = foldM (\acc r -> evalE expr r >>= (\x -> getInt acc >>= (\i -> return $ IntVal $ if x /= NullVal then i + 1 else i))) (IntVal 0) td
     -- Count non-bool expression not supported / may generate undefined behavior
     evalEAggAux Max _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc Data.Functor.<&> (IntVal . max i1))) (IntVal 0) td
@@ -327,6 +372,14 @@ evalEAgg (AggFun aggfun cs expr) td = do
         (IntVal numerator, IntVal denomenator) -> if denomenator == 0 then return $ IntVal 0 else return $ IntVal $ numerator `div` denomenator
         (_, _) -> throwError "AggFunction Type error in Avg"
 
+{- evalEAggNI :: DValue -> DValue -> ()SQLI DValue -}
+test_evalEAgg :: Test
+test_evalEAgg =
+  TestList
+    [ interp (evalEAgg (AggFun Sum All (Var $ VarName "var1")) []) sampleStore ~?= Right (Val $ IntVal 0),
+      interp (evalEAgg (AggFun Sum All (Var $ VarName "var2")) [Map.fromList [(VarName "var1", IntVal 1)]]) sampleStore ~?= Right (Val $ IntVal 0)
+    ]
+
 -- first do a regularization in expr -> make sure its Aggfunction free
 -- Map each row into some DValue
 -- Then Aggregate
@@ -334,6 +387,7 @@ evalEAgg (AggFun aggfun cs expr) td = do
 getInt :: DValue -> SQLI Int
 getInt (IntVal i) = return i
 getInt b@(BoolVal _) = getInt =<< weakCast b (IntType 32)
+getInt NullVal = return 0
 getInt v = throwCastError v (IntType 32)
 
 getBool :: DValue -> SQLI Bool
@@ -377,6 +431,21 @@ evalOp2 bop NullVal _ = return NullVal -- If either is NULL, return NULL
 evalOp2 bop _ NullVal = return NullVal
 evalOp2 bop dval1 dval2 =
   throwExpressionError (Op2 (Val dval1) bop (Val dval2))
+
+test_evaluateOp2 :: Test
+test_evaluateOp2 =
+  "evaluate Op2" ~:
+    TestList
+      [ interp (evalE (Op2 (Val NullVal) Eq (Val NullVal)) Map.empty) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Val $ IntVal 3) Eq (Val (IntVal 3))) Map.empty) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) Map.empty) sampleStore ~?= Right (BoolVal False),
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) Map.empty) sampleStore ~?= Right NullVal,
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (StringVal "what"))) sampleStore ~?= Left "Illegal Casting into INT(64): \"what\"",
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (IntVal 1))) sampleStore ~?= Right (IntVal 2),
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (BoolVal False))) sampleStore ~?= Right (IntVal 1),
+        interp (evalE (Op2 (Var $ VarName "student_id") Like (Val $ StringVal "Hi")) (Map.singleton (VarName "student_id") (StringVal "Hi"))) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Var $ VarName "student_id") Like (Val $ StringVal "John[1-9]")) (Map.singleton (VarName "student_id") (StringVal "John1"))) sampleStore ~?= Right (BoolVal True)
+      ]
 
 evalOp2Robust :: Bop -> DValue -> DValue -> SQLI DValue
 evalOp2Robust bop dval1 dval2 =
@@ -428,20 +497,28 @@ evalLimit Nothing td = return td
 evalLimit (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.take i $ tableData table)
 evalLimit _ _ = throwError "Limit cannot be negative"
 
-evalSelectExpr :: [(CountStyle, ColumnExpression)] -> (TableName, Table) -> SQLI (TableName, Table)
-evalSelectExpr = undefined
+evalOrderBy :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> Table -> SQLI Table
+evalOrderBy [] table = return table
+evalOrderBy orders (Table pk iName td) = do
+  ordering <- getOrdering orders
+  sortedTD <- evalSort ordering td
+  return $ Table pk iName sortedTD
 
-evalSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> TableData -> SQLI TableData
-evalSort orders td = do
-  ordering <- normalizeSort orders
-  return $ List.sortBy ordering td
+evalSort :: (Row -> Row -> Ordering) -> TableData -> SQLI TableData
+evalSort ordering td = return $ List.sortBy ordering td
 
 {-
 sort on the first variable, and group by -> repeatedly sort on the second and group by
 
 -}
-normalizeSort :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
-normalizeSort = foldrM decideOrdering (const $ const LT)
+getOrdering :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
+getOrdering = foldrM decideOrdering (const $ const LT) -- will not happen
+
+test_evalOrderBy :: Test
+test_evalOrderBy =
+  TestList
+    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] (tableSampleStudents)) sampleStore ~?= Right (Table (primaryKeys tableSampleStudents) (indexName tableSampleStudents) (reverse $ tableData tableSampleStudents))
+    ]
 
 {- foldrM (\(v, mad, mfl) acc -> normalizeSort x acc) undefined undefined -}
 
@@ -476,8 +553,79 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
           EQ -> accF r1 r2
           o -> o
 
-evalGroupBy :: [Var] -> (TableName, Table) -> SQLI (TableName, Table)
-evalGroupBy = undefined
+hasAggFun :: [ColumnExpression] -> Bool
+hasAggFun = List.foldr (\x acc -> acc || hasAggFunCol x) False
+  where
+    hasAggFunCol :: ColumnExpression -> Bool
+    hasAggFunCol (ColumnName expr) = hasAggFunExpr expr
+    hasAggFunCol (ColumnAlias expr _) = hasAggFunExpr expr
+    hasAggFunCol AllVar = False
+
+hasAggFunExpr :: Expression -> Bool
+hasAggFunExpr (AggFun {}) = True
+hasAggFunExpr (Op1 _ expr) = hasAggFunExpr expr
+hasAggFunExpr (Op2 expr1 _ expr2) = hasAggFunExpr expr1 || hasAggFunExpr expr2
+hasAggFunExpr (Fun _ expr) = hasAggFunExpr expr
+hasAggFunExpr _ = False
+
+evalGroupBySelect :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
+evalGroupBySelect [] (cs, ce) (tn, Table pk iName td) =
+  let rowGroups = if hasAggFun ce then [td] else List.map (: []) td
+   in evalSelectRowGroups (cs, ce) tn pk iName rowGroups
+evalGroupBySelect vars selectParams (tn, Table pk iName td) = do
+  ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
+  td <- evalSort ordering td
+  let rowGroups = List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
+   in evalSelectRowGroups selectParams tn pk iName rowGroups
+
+{-
+Steps for select
+1. For each group, do the following
+  1.1. If it is aggregate, then do it with that group
+  1.2. Otherwise, only select the first one
+2. Need to regroup pk and iName
+
+-}
+
+{-
+Still need to do
+  1. Select DISTINCT
+  2. renaming
+-}
+
+evalSelectRowGroups :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelectRowGroups (cs, ce) tn pk iName rowGroups =
+  Table pk iName
+    <$> foldrM
+      (\x acc -> evalSelectAux ce pk iName x >>= (\y -> return (y : acc)))
+      []
+      rowGroups
+  where
+    evalSelectAux :: [ColumnExpression] -> PrimaryKeys -> IndexName -> [Row] -> SQLI Row
+    evalSelectAux ce pk iName td =
+      foldM (\acc x -> evalColumnExpr x pk iName td <&> (acc `Map.union`)) Map.empty ce
+    {- foldM (\acc x -> evalColumnExpr pk iName td x) (Map.empty) ce -}
+    evalColumnExpr :: ColumnExpression -> PrimaryKeys -> IndexName -> [Row] -> SQLI Row
+    evalColumnExpr (ColumnName expr) pk iName td = do
+      exprNorm <- evalEAgg expr td
+      resValue <- evalE exprNorm (List.head td)
+      return $ Map.singleton (VarName $ TP.pretty expr) resValue
+    evalColumnExpr (ColumnAlias expr alias) pk iName td = do
+      exprNorm <- evalEAgg expr td
+      resValue <- evalE exprNorm (List.head td)
+      return $ Map.singleton (VarName alias) resValue
+    evalColumnExpr AllVar pk iName td =
+      return $ List.head td
+
+-- Basically an eval expression and return a dvalue -> Do this for every columm
+{-
+1. Evaluate the expression, inside aggregation
+2. Maybe need a fake aggfunction called same
+3. Basically need to find the elements in each expression and create a newer one
+4. Optimizing
+-}
+
+{-Given groupby returns an [[Row]], need information for -}
 
 {- compare :: DValue -> DValue -> Ordering
 compare (NullVal) _ = GT -}
@@ -567,8 +715,10 @@ minimumTableStudent = [(VarName "first_name", "")]
 -- >>> TP.pretty tableSampleStudents
 -- "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
 
+tableNumber = Table (NE.fromList [(VarName "num1", IntType 32), (VarName "num2", IntType 32)]) [(VarName "num3", StringType 255)] [Map.fromList [(VarName "num1", IntVal 1), (VarName "num2", IntVal 1), (VarName "num3", StringVal "a")]]
+
 sampleStore :: Store
-sampleStore = Store (Map.fromList [("Students", tableSampleStudents), ("Grades", tableSampleGrades)]) Map.empty
+sampleStore = Store (Map.fromList [("Students", tableSampleStudents), ("Grades", tableSampleGrades), ("Number", tableNumber)]) Map.empty
 
 -- Helper functions
 tableFMap :: (Row -> Row) -> Table -> Table
@@ -589,6 +739,34 @@ tableMapEither f t = do
 
 tableLength :: Table -> Int
 tableLength = length . tableData
+
+evalCreateCommand :: CreateCommand -> SQLI ()
+evalCreateCommand (CreateCommand ifnotexists namecreate idcreate) = do
+  tableMaybe <- getTable namecreate
+  table <- evalIDCreate idcreate
+  if ifnotexists && isJust tableMaybe
+    then return ()
+    else setScope namecreate table
+
+evalIDCreate :: [(Name, DType, Bool)] -> SQLI Table
+evalIDCreate idcreate = do
+  pkList <- mapM parseIDCreate (List.filter (\(_, _, isPrimary) -> isPrimary) idcreate)
+  iName <- mapM parseIDCreate (List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate)
+  return $ Table (NE.fromList pkList) iName []
+  where
+    parseIDCreate :: (Name, DType, Bool) -> SQLI (Var, DType)
+    parseIDCreate (name, dtype, isPrimary) =
+      case PAR.parse SPAR.varP name of
+        Right var -> return (var, dtype)
+        Left _ -> throwError "Fail to parse name"
+
+evalDeleteCommand :: DeleteCommand -> SQLI ()
+evalDeleteCommand (DeleteCommand fromdelete whdelete) = do
+  delScope fromdelete
+
+{- let pkList = List.foldr (\x acc -> parseIDCreate x) idcreate
+ in let indexName = List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate in
+  return $ Table  -}
 
 {- -- Evaluates Query
 evalQuery :: Query -> Scope -> Either ErrorMsg Table
@@ -803,6 +981,33 @@ lengthGroupBy (MultiGroupBy _ vs) = 1 + lengthGroupBy vs
 
 test1000 = interp (evalFrom (Join (TableRef "Students") InnerJoin (TableRef "Grades") [(Dot "Students" (VarName "student_id"), Dot "Grades" (VarName "student_id"))])) sampleStore
 
+test1003 = TP.pretty test1002
+
+test1004 = putStrLn test1003
+
+test1002 =
+  Table
+    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
+      indexName = [(VarName "age", IntType 32), (VarName "first_name", StringType 255), (VarName "gender", StringType 255), (VarName "grade", IntType 32), (VarName "last_name", StringType 255)],
+      tableData =
+        [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 95), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 84), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 90), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "History")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 86), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "Math")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "English")],
+          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 80), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "History")]
+        ]
+    }
+
 test1001 =
   Table
     { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
@@ -826,7 +1031,7 @@ test1001 =
         ]
     }
 
-test1002 = TP.pretty test1001
+{- test1002 = TP.pretty test1001 -}
 
 -- >>> test1002
 -- "student_id,subject,age,first_name,gender,grade,last_name\n1,Math,20,John,Male,85,Doe\n1,English,20,John,Male,78,Doe\n1,History,20,John,Male,92,Doe\n2,Math,21,Jane,Female,92,Smith\n2,English,21,Jane,Female,88,Smith\n2,History,21,Jane,Female,76,Smith\n3,Math,22,Michael,Male,78,Johnson\n3,English,22,Michael,Male,95,Johnson\n3,History,22,Michael,Male,84,Johnson\n4,Math,20,Emily,Female,90,Williams\n4,English,20,Emily,Female,85,Williams\n4,History,20,Emily,Female,88,Williams\n5,Math,23,Chris,Male,86,Anderson\n5,English,23,Chris,Male,92,Anderson\n5,History,23,Chris,Male,80,Anderson"

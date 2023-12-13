@@ -16,6 +16,8 @@ import Test.QuickCheck qualified as QC
 data Query
   = SelectQuery SelectCommand
   | DeleteQuery DeleteCommand
+  | CreateQuery CreateCommand
+  deriving (Eq, Show)
 
 -- **** Section for DeleteCommand ****
 
@@ -87,8 +89,8 @@ data Expression
   | Val DValue
   | Op1 Uop Expression -- e.g. NOT A
   | Op2 Expression Bop Expression -- e.g. A + 2
-  | AggFun AggFunction CountStyle Expression
-  | Fun Function Expression -- e.g. SUM / AVG
+  | AggFun AggFunction CountStyle Expression -- e.g. SUM / AVG
+  | Fun Function Expression
   deriving (Eq, Show)
 
 data Var
@@ -204,7 +206,7 @@ data DeleteCommand = DeleteCommand
 data CreateCommand = CreateCommand
   { ifNotExists :: Bool,
     nameCreate :: TableName,
-    idCreate :: [(Name, DType, Bool, Bool)]
+    idCreate :: [(Name, DType, Bool)]
     -- TODO: Haven't finished
   }
   deriving (Eq, Show)
@@ -212,7 +214,7 @@ data CreateCommand = CreateCommand
 -- **** Section for SelectCommand ****
 
 data SelectCommand = SelectCommand
-  { exprsSelect :: [(CountStyle, ColumnExpression)],
+  { exprsSelect :: (CountStyle, [ColumnExpression]),
     fromSelect :: FromExpression,
     whSelect :: Maybe Expression,
     groupbySelect :: [Var],

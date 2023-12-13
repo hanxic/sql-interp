@@ -1,21 +1,29 @@
 module TestInterpretation where
 
 import Interpretation
-import Parser
+import Parser qualified as P
+import SQLSyntax
+import System.Directory (doesFileExist)
+import System.FilePath
+import TableSyntax
 
-instance Arbitrary Table where
-  arbitrary :: Gen Table
-  arbitrary = undefined
+{- Plan of attack
+1. Create a folder with all the test cases
+2. For each test cases, fetch the SQL scripts
+  2.1 For each test cases, also fetch the resulting table
+  2.2 Return the two being the same
+-}
 
-  shrink :: Table -> [Table]
-  shrink = undefined
+{- readStringFromFolder :: FilePath -> FilePath -> IO (Maybe String)
+readStringFromFolder folder fileName = do
+  let filePath = folder </> fileName
+  fileExists <- doesFileExist filePath
+  if fileExists
+    then do
+      content <- readFile filePath
+      return (Just content)
+    else return Nothing -}
 
-prop_where_size :: Table -> Bool
-prop_where_size = undefined
-
--- prop_where_size = size (tableWithWhereClause) <= size (table)
-
-prop_select_all :: Table -> Bool
-prop_select_all = undefined
-
--- prop_select_all = select every column == table
+loadBaseFile :: IO (Maybe Store)
+loadBaseFile = do
+  errOBlock <- 

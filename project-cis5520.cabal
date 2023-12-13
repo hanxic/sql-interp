@@ -16,7 +16,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/project-cis5520
+  location: https://github.com/hanxic/project-cis5520
 
 common common-stanza
   ghc-options:         -Wno-type-defaults -fwarn-incomplete-patterns
@@ -46,7 +46,6 @@ library
       Parser
       GenSQL
       GenVSQL
-      GenTable
       Interpretation
       TableSyntax
       TableParser
@@ -77,6 +76,8 @@ test-suite project-cis5520-test
       exitcode-stdio-1.0
   main-is: 
       Spec.hs
+  other-modules:
+      TestInterpretation
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N

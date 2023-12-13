@@ -237,7 +237,7 @@ constrainSize n g = do
 genSelectCommand :: Int -> Gen SelectCommand
 genSelectCommand n =
   SelectCommand
-    <$> atLeastN 1 arbitrary
+    <$> ((,) <$> arbitrary <*> atLeastN 1 arbitrary)
     <*> genFromExpression n'
     <*> arbitrary
     <*> QC.sized (`constrainSize` arbitrary)
@@ -272,9 +272,8 @@ instance Arbitrary CreateCommand where
       <*> (QC.elements =<< genTablePool)
       <*> QC.sized
         ( `constrainSize1`
-            ( (,,,)
+            ( (,,)
                 <$> (QC.elements =<< genNamePool)
-                <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
             )
@@ -285,6 +284,14 @@ instance Arbitrary DeleteCommand where
     DeleteCommand
       <$> (QC.elements =<< genTablePool)
       <*> arbitrary
+
+instance Arbitrary Query where
+  arbitrary =
+    QC.frequency
+      [ (1, SelectQuery <$> arbitrary),
+        (1, CreateQuery <$> arbitrary),
+        (1, DeleteQuery <$> arbitrary)
+      ]
 
 -- ******** Table Generator ********
 

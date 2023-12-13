@@ -12,6 +12,7 @@ import SQLSyntax
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Text.ParserCombinators.ReadP (count)
+import Text.PrettyPrint (render)
 
 errorMsgUnitTest :: Either String b
 errorMsgUnitTest = Left "No parses"
@@ -30,6 +31,9 @@ prop_roundtrip_create cc = P.parse ccP (SPP.pretty cc) == Right cc
 
 prop_roundtrip_delete :: DeleteCommand -> Bool
 prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
+
+prop_roundtrip_queries :: [Query] -> Bool
+prop_roundtrip_queries qs = P.parse sqlP (render $ SPP.printQueries qs) == Right qs
 
 wsP :: Parser a -> Parser a
 wsP p = many P.space *> p <* many P.space
@@ -370,22 +374,24 @@ catchAnyWordL kw = flip (<|>) (empty <$ P.filter (/= kw) (P.lookAhead (wsP P.any
 columnExpressionP :: Parser ColumnExpression
 columnExpressionP = ColumnAlias <$> expP <*> (wsP (P.string "AS") *> nameP) <|> ColumnName <$> expP <|> starP
 
-exprsSelectP :: Parser [(CountStyle, ColumnExpression)]
+exprsSelectP :: Parser (CountStyle, [ColumnExpression])
 exprsSelectP =
-  wsP (P.string exprsSelectKW) *> P.sepBy1 (exprsSelectPAux <|> parens exprsSelectPAux) P.comma
+  (,)
+    <$> (wsP (P.string exprsSelectKW) *> countStyleP)
+    <*> P.sepBy1 (exprsSelectPAux <|> parens exprsSelectPAux) P.comma
   where
     exprsSelectKW = "SELECT"
-    exprsSelectPAux :: Parser (CountStyle, ColumnExpression)
-    exprsSelectPAux = (,) <$> countStyleP <*> columnExpressionP
+    exprsSelectPAux :: Parser ColumnExpression
+    exprsSelectPAux = columnExpressionP
 
 test_exprsSelectP :: Test
 test_exprsSelectP =
   TestList
-    [ P.parse exprsSelectP "SELECT A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS Something" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something")],
-      P.parse exprsSelectP "SELECT DISTINCT A AS Something" ~?= Right [(Distinct, ColumnAlias (Var $ VarName "A") "Something")],
-      P.parse exprsSelectP "SELECT A A" ~?= Right [(All, ColumnName $ Var $ VarName "A")],
-      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right [(All, ColumnAlias (Var $ VarName "A") "Something"), (All, ColumnAlias (Var $ VarName "B") "C")],
+    [ P.parse exprsSelectP "SELECT A" ~?= Right (All, [ColumnName $ Var $ VarName "A"]),
+      P.parse exprsSelectP "SELECT A AS Something" ~?= Right (All, [ColumnAlias (Var $ VarName "A") "Something"]),
+      P.parse exprsSelectP "SELECT DISTINCT A AS Something" ~?= Right (Distinct, [ColumnAlias (Var $ VarName "A") "Something"]),
+      P.parse exprsSelectP "SELECT A A" ~?= Right (All, [ColumnName $ Var $ VarName "A"]),
+      P.parse exprsSelectP "SELECT A AS Something, B AS C" ~?= Right (All, [ColumnAlias (Var $ VarName "A") "Something", ColumnAlias (Var $ VarName "B") "C"]),
       P.parse exprsSelectP "SELECT" ~?= errorMsgUnitTest
     ]
 
@@ -583,13 +589,13 @@ test_fromSelectP =
 
 whSelectP :: Parser (Maybe Expression)
 whSelectP =
-  catchAnyWord whSelectKW (wsP (P.string whSelectKW) *> (Just <$> expP))
+  catchAnyWord whSelectKW (wsP (P.string whSelectKW) *> (Just <$> expP)) <|> return Nothing
   where
     whSelectKW = "WHERE"
 
 groupbySelectP :: Parser [Var]
 groupbySelectP =
-  catchAnyWordL "GROUP" (pWords ["GROUP", "BY"] *> P.sepBy1 varP P.comma)
+  catchAnyWordL "GROUP" (pWords ["GROUP", "BY"] *> P.sepBy1 varP P.comma) <|> return []
   where
     groupbySelectKW = "GROUP BY"
 
@@ -604,7 +610,7 @@ test_groupbySelectP =
 
 orderbySelectP :: Parser [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
 orderbySelectP =
-  catchAnyWordL "ORDER" (wsP (P.string orderbySelectKW) *> P.sepBy1 orderSelectPAux P.comma)
+  catchAnyWordL "ORDER" (wsP (P.string orderbySelectKW) *> P.sepBy1 orderSelectPAux P.comma) <|> return []
   where
     orderbySelectKW = "ORDER BY"
     orderSelectPAux :: Parser (Var, Maybe OrderTypeAD, Maybe OrderTypeFL)
@@ -623,7 +629,7 @@ test_orderbySelectP =
 
 limitSelectP :: Parser (Maybe Int)
 limitSelectP =
-  catchAnyWord limitSelectKW (wsP (P.string limitSelectKW) *> (Just <$> P.int))
+  catchAnyWord limitSelectKW (wsP (P.string limitSelectKW) *> (Just <$> P.int)) <|> return Nothing
   where
     limitSelectKW = "LIMIT"
 
@@ -645,7 +651,7 @@ test_limitSelectP =
 
 offsetSelectP :: Parser (Maybe Int)
 offsetSelectP =
-  catchAnyWord offsetSelectKW (wsP (P.string offsetSelectKW) *> (Just <$> P.int))
+  catchAnyWord offsetSelectKW (wsP (P.string offsetSelectKW) *> (Just <$> P.int)) <|> return Nothing
   where
     {- wsP (P.string "OFFSET") *> (Just <$> P.int)
       <|> Nothing <$ P.lookAhead (wsP P.anyWord) -}
@@ -672,45 +678,20 @@ scP =
     <*> limitSelectP
     <*> offsetSelectP
 
-test7 =
-  SelectCommand
-    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" $ VarName "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
-      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" $ VarName "Var2"), (Dot "Table0" $ VarName "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" $ VarName "Var3")]) [(Dot "Table0" $ VarName "Var2", Dot "Table0" $ VarName "Var2"), (VarName "Var0", VarName "Var3"), (VarName "Var0", VarName "Var0")],
-      whSelect = Nothing,
-      groupbySelect = [Dot "Table2" $ VarName "Var0", Dot "Table1" $ VarName "Var3", VarName "Var2"],
-      orderbySelect = [(Dot "Table0" $ VarName "Var0", Nothing, Nothing), (Dot "Table5" $ VarName "Var0", Just DESC, Just NULLSFIRST), (VarName "Var4", Nothing, Just NULLSFIRST)],
-      limitSelect = Nothing,
-      offsetSelect = Nothing
-    }
+test203 = P.doParse exprsSelectP "SELECT *\n"
 
--- >>> SPP.pretty test7
--- "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT LENGTH(Var3) AS Table2\n FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n GROUP BY Table2.Var0, Table1.Var3, Var2\n ORDER BY Table0.Var0, Table5.Var0 DESC NULLS FIRST, Var4 NULLS FIRST;"
+-- >>> test203
+-- Just ((All,[AllVar]),"")
 
-test8 :: String
-test8 = "SELECT *, DISTINCT UPPER(Table0.Var0) AS Table3, DISTINCT *, DISTINCT LENGTH(Var3) AS Table2\n FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n GROUP BY Table2.Var0, Table1.Var3, Var2\n ORDER BY Table0.Var0, Table5.Var0 DESC NULLS FIRST, Var4 NULLS FIRST;"
+test204 = P.doParse fromSelectP "FROM Students"
 
--- >>> P.parse scP test8
--- Right (SelectCommand {exprsSelect = [(All,AllVar),(Distinct,ColumnAlias (Fun Upper (Var (Dot "Table0" "Var0"))) "Table3"),(Distinct,AllVar),(Distinct,ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")], fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0",Dot "Table2" "Var2"),(Dot "Table0" "Var2",VarName "Var3"),(VarName "Var3",Dot "Table4" "Var3")]) [], whSelect = Nothing, groupbySelect = [], orderbySelect = [], limitSelect = Nothing, offsetSelect = Nothing})
+-- >>> test204
+-- Just (TableRef "Students","")
 
-test14 =
-  SelectCommand
-    { exprsSelect = [(All, AllVar), (Distinct, ColumnAlias (Fun Upper (Var (Dot "Table0" $ VarName "Var0"))) "Table3"), (Distinct, AllVar), (Distinct, ColumnAlias (Fun Len (Var (VarName "Var3"))) "Table2")],
-      fromSelect = Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0", Dot "Table2" $ VarName "Var2"), (Dot "Table0" $ VarName "Var2", VarName "Var3"), (VarName "Var3", Dot "Table4" $ VarName "Var3")]) [],
-      whSelect = Nothing,
-      groupbySelect = [],
-      orderbySelect = [],
-      limitSelect = Nothing,
-      offsetSelect = Nothing
-    }
+test205 = P.doParse groupbySelectP ""
 
-test11 = "FROM Table0 RIGHT JOIN (Table5 LEFT JOIN Table0 ON Var0=Table2.Var2,Table0.Var2=Var3,Var3=Table4.Var3) ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n "
-
-test16 = "FROM (Table5 LEFT JOIN Table4) OUTER JOIN Table0 ON Table0.Var0=Var0,Var2=Var0,Var0=Table1.Var0\n "
-
-test12 = fromSelectP
-
--- >>> P.doParse test12 test11
--- Just (Join (TableRef "Table0") RightJoin (Join (TableRef "Table5") LeftJoin (TableRef "Table0") [(VarName "Var0",Dot "Table2" "Var2"),(Dot "Table0" "Var2",VarName "Var3"),(VarName "Var3",Dot "Table4" "Var3")]) [],"ON Table0.Var2=Table0.Var2,Var0=Var3,Var0=Var0\n ")
+-- >>> test205
+-- Just ([],"")
 
 ccPrefixP :: Parser Bool
 ccPrefixP =
@@ -749,38 +730,61 @@ dTypeP = str2DType <$> wsP (P.choice (map P.string ["INTEGER", "BIGINT", "BOOLEA
   | BoolType
   deriving (Eq, Show)-}
 
-idCreateP :: Parser (Name, DType, Bool, Bool)
+idCreateP :: Parser (Name, DType, Bool)
 idCreateP =
-  (,,,)
+  (,,)
     <$> nameP
     <*> dTypeP
-    <*> (True <$ pWords ["NOT", "NULL"] <|> pure False)
     <*> (True <$ pWords ["PRIMARY", "KEY"] <|> pure False)
 
 test_idCreateP :: Test
 test_idCreateP =
   TestList
-    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True, True),
-      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True, True),
-      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False, True)
+    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True),
+      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True),
+      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False)
     ]
 
 ccP :: Parser CreateCommand
 ccP = CreateCommand <$> ccPrefixP <*> nameP <*> parens (P.sepBy1 idCreateP P.comma)
 
-test9 = "Var4 INT(26)"
-
-test13 = "(Var0 BOOLEAN, Var1 BOOLEAN NOT NULL PRIMARY KEY, Var1 VARCHAR(159) NOT NULL)"
-
-test10 = idCreateP
-
--- >>> P.parse test10 test9
--- Left "No parses"
+test_ccP :: Test
+test_ccP =
+  TestList
+    [ P.parse ccP "CREATE TABLE Grades (student_id INTEGER)" ~?= Right (CreateCommand False "Grades" [("student_id", IntType 16, False)]),
+      P.parse ccP "CREATE TABLE Grades (student_id INTEGER PRIMARY KEY, grades INTEGER)" ~?= Right (CreateCommand False "Grades" [("student_id", IntType 16, True), ("grades", IntType 16, False)])
+    ]
 
 dcP :: Parser DeleteCommand
 dcP = dcPrefixP *> (DeleteCommand <$> nameP <*> whSelectP)
   where
     dcPrefixP = pWords ["DELETE", "FROM"]
+
+queryP :: Parser Query
+queryP = SelectQuery <$> scP <|> DeleteQuery <$> dcP <|> CreateQuery <$> ccP
+
+sqlP :: Parser [Query]
+sqlP = many (queryP <* wsP (P.char ';'))
+
+test_sqlP :: Test
+test_sqlP =
+  TestList
+    [ P.parse sqlP "CREATE TABLE Grades (student_id INTEGER); CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255))"
+        ~?= Right
+          [ CreateQuery $
+              CreateCommand
+                False
+                "Grades"
+                [("student_id", IntType 16, False)],
+            CreateQuery $
+              CreateCommand
+                False
+                "Students"
+                [ ("student_id", IntType 16, True),
+                  ("name", StringType 255, False)
+                ]
+          ]
+    ]
 
 test_all :: IO Counts
 test_all =
@@ -807,8 +811,21 @@ test_all =
         test_limitSelectP,
         test_offsetSelectP,
         test_ccPrefixP,
-        test_idCreateP
+        test_idCreateP,
+        test_ccP
       ]
+
+test102 = [CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0", BoolType, True), ("Var0", StringType 156, True), ("Var2", BoolType, True)]}), DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})]
+
+test103 = render $ SPP.printQueries test102
+
+-- >>> test103
+-- "CREATE TABLE IF NOT EXISTS Table0 (Var0 BOOLEAN PRIMARY KEY, Var0 VARCHAR(156) PRIMARY KEY, Var2 BOOLEAN PRIMARY KEY); DELETE FROM Table4 WHERE AVG(DISTINCT 4512371);"
+
+test104 = P.doParse sqlP test103
+
+-- >>> test104
+-- Just ([CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0",BoolType,True),("Var0",StringType 156,True),("Var2",BoolType,True)]}),DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})],"")
 
 qc :: IO ()
 qc = do
