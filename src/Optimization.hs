@@ -41,18 +41,3 @@ optimizeCascProjection = undefined
 
 combineSelectJoin :: AST -> AST
 combineSelectJoin = undefined
-
-instance Arbitrary Query where
-  arbitrary :: Gen Query
-  arbitrary = undefined
-
-  shrink :: Query -> [Query]
-  shrink = undefined
-
-instance Eq Query where
-  (==) :: Query -> Query -> Bool
-  _ == _ = undefined
-
-instance Show Query where
-  show :: Query -> String
-  show = undefined

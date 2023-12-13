@@ -2,8 +2,9 @@ module TestInterpretation where
 
 import Interpretation
 import Parser qualified as P
+import SQLParser qualified as SPAR
 import SQLSyntax
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath
 import TableSyntax
 
@@ -24,6 +25,20 @@ readStringFromFolder folder fileName = do
       return (Just content)
     else return Nothing -}
 
-loadBaseFile :: IO (Maybe Store)
+basePath = "./test/test-suite/Base/base.sql"
+
+loadBaseFile :: IO (Maybe Queries)
 loadBaseFile = do
-  errOBlock <- 
+  errOBlock <- SPAR.parseSQLFile basePath
+  filePath <- getCurrentDirectory
+  putStrLn filePath
+  case errOBlock of
+    Left errMsg -> putStrLn errMsg >> return Nothing
+    Right qs -> return $ Just qs
+
+loadBaseStore :: Store -> IO (Maybe Store)
+loadBaseStore store = do
+  baseQueries <- loadBaseFile
+  case baseQueries of
+    Nothing -> return Nothing
+    Just qs -> return $ Just $ exec (eval qs) store

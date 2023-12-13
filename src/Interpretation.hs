@@ -154,6 +154,9 @@ evalFrom (Join fe1 js fe2 jns) = do
 interp :: SQLI a -> Store -> Either String a
 interp = S.evalState . runExceptT
 
+exec :: SQLI a -> Store -> Store
+exec = S.execState . runExceptT
+
 test_evalFrom :: Test
 test_evalFrom =
   "evaluate From" ~:
@@ -270,8 +273,12 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             else throwAliases var1 var2
 
 evalQuery :: Query -> SQLI ()
-evalQuery (SelectQuery q) = undefined {- evalSelectCommand q -}
+evalQuery (SelectQuery q) = undefined
 evalQuery (DeleteQuery q) = evalDeleteCommand q
+evalQuery (CreateQuery q) = evalCreateCommand q
+
+eval :: Queries -> SQLI ()
+eval qs = mapM_ evalQuery qs
 
 evalSelectCommand :: SelectCommand -> SQLI Table
 evalSelectCommand q = do
@@ -685,6 +692,9 @@ emptyTable =
 
 emptyRow :: Row
 emptyRow = Map.empty
+
+emptyStore :: Store
+emptyStore = Store emptyScope Map.empty
 
 tableSampleGradesTXT = "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,Math,92\n2,English,88\n2,History,76\n3,Math,78\n3,English,95\n3,History,84\n4,Math,90\n4,English,85\n4,History,88\n5,Math,86\n5,English,92\n5,History,80"
 

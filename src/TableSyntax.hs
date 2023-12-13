@@ -13,6 +13,8 @@ data Store = Store
   }
   deriving (Eq, Show)
 
+type Alias = Map TableName TableName
+
 type Scope = Map TableName Table
 
 data Table = Table

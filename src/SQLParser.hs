@@ -32,8 +32,8 @@ prop_roundtrip_create cc = P.parse ccP (SPP.pretty cc) == Right cc
 prop_roundtrip_delete :: DeleteCommand -> Bool
 prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
 
-prop_roundtrip_queries :: [Query] -> Bool
-prop_roundtrip_queries qs = P.parse sqlP (render $ SPP.printQueries qs) == Right qs
+prop_roundtrip_queries :: Queries -> Bool
+prop_roundtrip_queries qs = P.parse sqlP (SPP.printQueries qs) == Right qs
 
 wsP :: Parser a -> Parser a
 wsP p = many P.space *> p <* many P.space
@@ -763,8 +763,11 @@ dcP = dcPrefixP *> (DeleteCommand <$> nameP <*> whSelectP)
 queryP :: Parser Query
 queryP = SelectQuery <$> scP <|> DeleteQuery <$> dcP <|> CreateQuery <$> ccP
 
-sqlP :: Parser [Query]
+sqlP :: Parser Queries
 sqlP = many (queryP <* wsP (P.char ';'))
+
+parseSQLFile :: String -> IO (Either P.ParseError Queries)
+parseSQLFile = P.parseFromFile (const <$> sqlP <*> P.eof)
 
 test_sqlP :: Test
 test_sqlP =
@@ -812,20 +815,21 @@ test_all =
         test_offsetSelectP,
         test_ccPrefixP,
         test_idCreateP,
-        test_ccP
+        test_ccP,
+        test_sqlP
       ]
 
-test102 = [CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0", BoolType, True), ("Var0", StringType 156, True), ("Var2", BoolType, True)]}), DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})]
+test102 = [DeleteQuery (DeleteCommand {fromDelete = "Table0", whDelete = Nothing})]
 
-test103 = render $ SPP.printQueries test102
+test103 = SPP.printQueries test102
 
 -- >>> test103
--- "CREATE TABLE IF NOT EXISTS Table0 (Var0 BOOLEAN PRIMARY KEY, Var0 VARCHAR(156) PRIMARY KEY, Var2 BOOLEAN PRIMARY KEY); DELETE FROM Table4 WHERE AVG(DISTINCT 4512371);"
+-- "DELETE FROM Table0;"
 
 test104 = P.doParse sqlP test103
 
 -- >>> test104
--- Just ([CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0",BoolType,True),("Var0",StringType 156,True),("Var2",BoolType,True)]}),DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})],"")
+-- Just ([DeleteQuery (DeleteCommand {fromDelete = "Table0", whDelete = Nothing})],"")
 
 qc :: IO ()
 qc = do

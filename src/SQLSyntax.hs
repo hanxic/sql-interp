@@ -19,6 +19,8 @@ data Query
   | CreateQuery CreateCommand
   deriving (Eq, Show)
 
+type Queries = [Query]
+
 -- **** Section for DeleteCommand ****
 
 {- Awesome grammar source: https://forcedotcom.github.io/phoenix/

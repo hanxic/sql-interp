@@ -299,8 +299,11 @@ instance PP Query where
   pp (DeleteQuery dc) = pp dc
   pp (CreateQuery cc) = pp cc
 
-printQueries :: [Query] -> Doc
-printQueries qs = PP.hsep (map pp qs)
+prettyPrintQueries :: Queries -> Doc
+prettyPrintQueries qs = PP.hsep (map pp qs)
+
+printQueries :: Queries -> String
+printQueries = PP.render . prettyPrintQueries
 
 -- TODO: Add nested to make sure not over 80 words
 
