@@ -1,15 +1,19 @@
 module TestInterpretation where
 
 import Control.Monad (foldM)
+import Control.Monad.Except
 import Control.Monad.State
+import Data.Map qualified as Map (lookup)
 import Interpretation
 import Parser qualified as P
 import SQLParser qualified as SPAR
 import SQLSyntax
 import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath
-import TableParser qualified as SPAR
+import TableParser qualified as TPAR
+import TablePrinter qualified as TP
 import TableSyntax
+import Test.HUnit
 
 {- Plan of attack
 1. Create a folder with all the test cases
@@ -28,30 +32,195 @@ readStringFromFolder folder fileName = do
       return (Just content)
     else return Nothing -}
 
-type IOSQLI a = StateT Store IO a
+type IOS a = StateT IOStore IO a
 
-testPath = "./test/test-suite/"
+testPath = "./test/test-suite"
 
-setupPath = testPath ++ "setup/"
+setupPath = testPath </> "setup"
 
-setupSQL = "setup.sql"
+setupSQL = "setup"
 
 setupCSVs = ["Customers", "Orders", "Shippings"]
 
-csvformat = ".csv"
+csvformat = "csv"
+
+sqlformat = "sql"
+
+data IOStore = IOStore
+  { currentQueries :: Queries,
+    stack :: Stack,
+    outputLoc :: OutputLoc
+  }
+
+type Stack = Store
+
+data OutputLoc
+  = File FilePath
+  | Terminal
+
+getStack :: IOS Stack
+getStack = do gets stack
+
+setStack :: Stack -> IOS ()
+setStack newStore = do
+  ioStore <- get
+  put (IOStore (currentQueries ioStore) newStore (outputLoc ioStore))
+
+getStackTable :: TableName -> IOS (Maybe Table)
+getStackTable tablename = do Map.lookup tablename . scope <$> getStack
+
+getCurrentQueries :: IOS Queries
+getCurrentQueries = do gets currentQueries
+
+setCurrentQueries :: Queries -> IOS ()
+setCurrentQueries qs = do
+  ioStore <- get
+  put (IOStore qs (stack ioStore) (outputLoc ioStore))
+
+addCurrentQueries :: Queries -> IOS ()
+addCurrentQueries qs' = do
+  qs <- getCurrentQueries
+  setCurrentQueries $ qs ++ qs'
+
+popCurrentQueries :: IOS (Maybe Query)
+popCurrentQueries = do
+  qs <- getCurrentQueries
+  case qs of
+    [] -> return Nothing
+    (q : qs') -> setCurrentQueries qs' >> return (Just q)
+
+flushCurrentQueries :: IOS Queries
+flushCurrentQueries = do
+  qs <- getCurrentQueries
+  setCurrentQueries []
+  return qs
+
+getOutputLoc :: IOS OutputLoc
+getOutputLoc = do gets outputLoc
+
+setOutputLoc :: OutputLoc -> IOS ()
+setOutputLoc outputLoc = do
+  ioStore <- get
+  put (IOStore (currentQueries ioStore) (stack ioStore) outputLoc)
+
+execProgram :: IOS a -> IO ()
+execProgram action = do
+  (_, IOStore _ result _) <- runStateT action (IOStore [] emptyStore Terminal)
+  putStrLn $ TP.printStore result
+
+hideContext :: IOS a -> IOS a
+hideContext action = do
+  store <- get
+  a <- action
+  put store
+  return a
 
 -- "./test/test-suite/Base/base.sql"
 
-loadSetupFile' :: IOSQLI (Maybe Queries)
-loadSetupFile' = do
-  errOScripts <- lift $ SPAR.parseSQLFile (setupPath ++ setupSQL)
+loadSetupFile :: IOS ()
+loadSetupFile = do
+  errOScripts <- lift $ SPAR.parseSQLFile (setupPath </> setupSQL -<.> sqlformat)
   filePath <- lift getCurrentDirectory
   lift $ putStrLn filePath
   case errOScripts of
-    Left errMsg -> lift $ putStrLn errMsg >> return Nothing
-    Right qs -> return $ Just qs
+    Left errMsg -> lift $ putStrLn errMsg
+    Right qs -> setCurrentQueries qs
 
-loadSetupFile :: IO (Maybe Queries)
+loadSetupStore :: IOS ()
+loadSetupStore = do
+  baseQueries <- loadSetupFile
+  (IOStore qs store _) <- get
+  setStack $ exec (eval qs) store
+
+putStrLnIOS :: String -> IOS ()
+putStrLnIOS = lift . putStrLn
+
+loadSetupTable :: IOS ()
+loadSetupTable = do
+  mapM_ (loadTable setupPath) setupCSVs
+
+loadSetup :: IOS ()
+loadSetup = do
+  loadSetupStore
+  loadSetupTable
+
+loadScript :: String -> IOS ()
+loadScript scriptPath = do
+  errOScript <- lift $ SPAR.parseSQLFile scriptPath
+  case errOScript of
+    Left errMsg -> lift $ putStrLn errMsg
+    Right qs -> setCurrentQueries qs
+
+loadTable :: String -> String -> IOS ()
+loadTable tableFolder tablename = do
+  store <- getStack
+  case interp (getTable tablename) store of
+    Left errMsg -> putStrLnIOS errMsg
+    Right Nothing -> putStrLnIOS "Cannot find table"
+    Right (Just (_, Table pk iName _)) ->
+      do
+        errOTable <- lift $ TPAR.parseCSVFile pk iName (tableFolder </> tablename -<.> csvformat)
+        case errOTable of
+          Left errMsgTable -> putStrLnIOS errMsgTable
+          Right table ->
+            case interp (setScope tablename table) store of
+              Left errMsgSet -> putStrLnIOS errMsgSet
+              Right newStore -> setStack newStore
+
+runQuery :: IOS Table
+runQuery = do
+  stack <- getStack
+  qMaybe <- popCurrentQueries
+  case qMaybe of
+    Nothing -> return emptyTable
+    Just q -> case interp (evalQuery q) stack of
+      Left errMsg -> putStrLnIOS errMsg >> return emptyTable
+      Right table -> return table
+
+runQueries :: IOS ()
+runQueries = do
+  stack <- getStack
+  qs <- flushCurrentQueries
+  setStack $ exec (eval qs) stack
+
+setupEnv :: String -> String -> String -> IOS ()
+setupEnv answerFolder answerScript answerName = do
+  loadScript (answerFolder </> answerScript -<.> sqlformat)
+  runQueries
+  loadTable answerFolder answerName
+
+-- | answerPath should be free of suffix
+runTestCase :: String -> String -> String -> String -> IOS ()
+runTestCase answerFolder answerScript answerName testScript = do
+  setupEnv answerFolder answerScript answerName
+  loadScript (answerFolder </> testScript -<.> sqlformat)
+  resultTable <- runQuery
+  answerMaybe <- getStackTable answerName
+  case answerMaybe of
+    Nothing -> putStrLnIOS "Answer disappeared!!"
+    Just answerTable ->
+      lift $
+        void
+          ( runTestTT
+              (("running Test " ++ testScript) ~: (resultTable ~?= answerTable))
+          )
+
+{- loadTestCases :: IOS ()
+loadTestCases = undefined -}
+
+runTestCases :: IOS ()
+runTestCases = do
+  loadSetup
+  mapM_ (\(x1, x2, x3, x4) -> hideContext (runTestCase x1 x2 x3 x4)) testcases
+
+{- setupEnv (testPath </> "test1") "answer" "answer" -}
+
+test103 = SPAR.parseSQLFile (testPath </> "test1" </> "test1" -<.> sqlformat)
+
+-- loadTest
+testcases = map (\(x1, x2, x3, x4) -> (testPath </> x1, x2, x3, x4)) [("test1", "answer", "answer", "test1")]
+
+{- loadSetupFile :: IO (Maybe Queries)
 loadSetupFile = do
   errOScripts <- SPAR.parseSQLFile (setupPath ++ setupSQL)
   filePath <- getCurrentDirectory
@@ -91,21 +260,10 @@ loadSetup = do
   baseStore <- loadSetupStore emptyStore
   case baseStore of
     Nothing -> return Nothing
-    Just store -> Just <$> loadSetupTable store
+    Just store -> Just <$> loadSetupTable store -}
 
 {-     go :: Store -> String -> IO Store
 go store tablename =
   alterStoreIO (getTable tablename) store (
     \(_, Table pk iName _) ->
   )-}
-
-alterStoreIO :: SQLI (Maybe a) -> Store -> (a -> IO Store) -> IO Store
-alterStoreIO sqli store f =
-  let errOSucc = interp sqli store
-   in case errOSucc of
-        Left errMsg -> putStrLn errMsg >> return store
-        Right Nothing -> putStrLn "Store alter unsuccessful" >> return store
-        Right (Just a) -> f a
-
--- loadTest
-testcases = ["test1"]

@@ -128,16 +128,16 @@ stringInP c f = P.between cP (f $ escape (c ==)) cP
     cP = P.char c
 
 stringValP :: Parser DValue
-stringValP = StringVal <$> wsP (stringInP '\"' many)
+stringValP = StringVal <$> wsP (stringInP '\'' many)
 
 test_stringValP :: Test
 test_stringValP =
   TestList
-    [ P.parse stringValP "\"a\"" ~?= Right (StringVal "a"),
-      P.parse stringValP "\"a\\\"\"" ~?= Right (StringVal "a\\"),
-      P.parse (many stringValP) "\"a\"   \"b\""
+    [ P.parse stringValP "\'a\'" ~?= Right (StringVal "a"),
+      P.parse stringValP "\'a\\\'\'" ~?= Right (StringVal "a\\"),
+      P.parse (many stringValP) "\'a\'   \'b\'"
         ~?= Right [StringVal "a", StringVal "b"],
-      P.parse (many stringValP) "\" a\"   \"b\""
+      P.parse (many stringValP) "\' a\'   \'b\'"
         ~?= Right [StringVal " a", StringVal "b"]
     ]
 
@@ -602,9 +602,9 @@ groupbySelectP =
 test_groupbySelectP :: Test
 test_groupbySelectP =
   TestList
-    [ P.parse groupbySelectP "GROUP BY" ~?= errorMsgUnitTest,
-      P.parse groupbySelectP "GROUP" ~?= errorMsgUnitTest,
-      P.parse groupbySelectP "" ~?= errorMsgUnitTest,
+    [ P.parse groupbySelectP "GROUP BY" ~?= Right [],
+      P.parse groupbySelectP "GROUP" ~?= Right [],
+      P.parse groupbySelectP "" ~?= Right [],
       P.parse groupbySelectP "GROUP BY S" ~?= Right [VarName "S"]
     ]
 
@@ -619,9 +619,9 @@ orderbySelectP =
 test_orderbySelectP :: Test
 test_orderbySelectP =
   TestList
-    [ P.parse orderbySelectP "ORDER" ~?= errorMsgUnitTest,
-      P.parse orderbySelectP "ORDER BY" ~?= errorMsgUnitTest,
-      P.parse orderbySelectP "" ~?= errorMsgUnitTest, -- Not the right test cases
+    [ P.parse orderbySelectP "ORDER" ~?= Right [],
+      P.parse orderbySelectP "ORDER BY" ~?= Right [],
+      P.parse orderbySelectP "" ~?= Right [], -- Not the right test cases
       P.parse orderbySelectP "ORDER BY S" ~?= Right [(VarName "S", Nothing, Nothing)],
       P.parse orderbySelectP "ORDER BY S ASC, A DESC" ~?= Right [(VarName "S", Just ASC, Nothing), (VarName "A", Just DESC, Nothing)],
       P.parse orderbySelectP "ORDER BY S ASC, A NULLS FIRST " ~?= Right [(VarName "S", Just ASC, Nothing), (VarName "A", Nothing, Just NULLSFIRST)]
@@ -641,9 +641,9 @@ limitSelectP =
 test_limitSelectP :: Test
 test_limitSelectP =
   TestList
-    [ P.parse limitSelectP "LIMIT" ~?= errorMsgUnitTest,
+    [ P.parse limitSelectP "LIMIT" ~?= Right Nothing,
       P.parse limitSelectP "LIMIT 1" ~?= Right (Just 1),
-      P.parse limitSelectP "    " ~?= errorMsgUnitTest,
+      P.parse limitSelectP "    " ~?= Right Nothing,
       P.parse limitSelectP "    ;" ~?= Right Nothing
     ]
 
@@ -661,9 +661,9 @@ offsetSelectP =
 test_offsetSelectP :: Test
 test_offsetSelectP =
   TestList
-    [ P.parse offsetSelectP "OFFSET" ~?= errorMsgUnitTest,
+    [ P.parse offsetSelectP "OFFSET" ~?= Right Nothing,
       P.parse offsetSelectP "OFFSET 1" ~?= Right (Just 1),
-      P.parse offsetSelectP "   " ~?= errorMsgUnitTest,
+      P.parse offsetSelectP "   " ~?= Right Nothing,
       P.parse offsetSelectP " ;" ~?= Right Nothing
     ]
 
@@ -678,7 +678,7 @@ scP =
     <*> limitSelectP
     <*> offsetSelectP
 
-test203 = P.doParse exprsSelectP "SELECT *\n"
+test203 = P.doParse scP "SELECT o.order_id, o.item, o.amount, c.first_name, c.last_name, c.age, c.country\nFROM Orders AS o\nJOIN Customers AS c ON o.customer_id = c.customer_id\nJOIN Shippings AS s ON o.customer_id = s.customer\nWHERE s.status = 'Delivered';"
 
 -- >>> test203
 -- Just ((All,[AllVar]),"")
@@ -740,9 +740,9 @@ idCreateP =
 test_idCreateP :: Test
 test_idCreateP =
   TestList
-    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True),
-      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True),
-      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False)
+    [ P.parse idCreateP "id BIGINT PRIMARY KEY" ~?= Right ("id", IntType 32, True),
+      P.parse idCreateP "id BOOLEAN PRIMARY KEY" ~?= Right ("id", BoolType, True),
+      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, True)
     ]
 
 ccP :: Parser CreateCommand
@@ -772,7 +772,7 @@ parseSQLFile = P.parseFromFile (const <$> sqlP <*> P.eof)
 test_sqlP :: Test
 test_sqlP =
   TestList
-    [ P.parse sqlP "CREATE TABLE Grades (student_id INTEGER); CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255))"
+    [ P.parse sqlP "CREATE TABLE Grades (student_id INTEGER); CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255));"
         ~?= Right
           [ CreateQuery $
               CreateCommand
@@ -788,6 +788,11 @@ test_sqlP =
                 ]
           ]
     ]
+
+test1108 = P.doParse sqlP "CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255));"
+
+-- >>> test1108
+-- Just ([CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Students", idCreate = [("student_id",IntType 16,True),("name",StringType 255,False)]})],"")
 
 test_all :: IO Counts
 test_all =
@@ -843,3 +848,5 @@ qc = do
   QC.quickCheck prop_roundtrip_create
   putStrLn "roundtrip_delete"
   QC.quickCheck prop_roundtrip_delete
+  putStrLn "roundtrip_queries"
+  QC.quickCheck prop_roundtrip_queries

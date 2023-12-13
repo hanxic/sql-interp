@@ -9,7 +9,13 @@ import TestInterpretation
 main :: IO ()
 main = do
   putStrLn "SQL-Interp Test suites "
-  noneOSetupStore <- loadSetup
-  case noneOSetupStore of
-    Nothing -> return ()
-    Just setupStore -> putStrLn $ TP.printStore setupStore
+  testProgram
+
+testProgram :: IO ()
+testProgram =
+  execProgram runTestCases
+
+{- noneOSetupStore <- loadSetup
+case noneOSetupStore of
+  Nothing -> return ()
+  Just setupStore -> putStrLn $ TP.printStore setupStore -}

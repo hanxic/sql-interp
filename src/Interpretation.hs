@@ -117,6 +117,9 @@ delScope tn = do
    in let newStore = Store newScope (alias store)
        in S.put newStore
 
+getStore :: SQLI Store
+getStore = S.get
+
 hideScope :: SQLI a -> SQLI a
 hideScope sqli = do
   store <- S.get
@@ -272,13 +275,13 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             then return $ \row1 row2 -> Map.lookup jo2 row1 == Map.lookup jo1 row2
             else throwAliases var1 var2
 
-evalQuery :: Query -> SQLI ()
-evalQuery (SelectQuery q) = undefined
+evalQuery :: Query -> SQLI Table
+evalQuery (SelectQuery q) = evalSelectCommand q
 evalQuery (DeleteQuery q) = evalDeleteCommand q
 evalQuery (CreateQuery q) = evalCreateCommand q
 
 eval :: Queries -> SQLI ()
-eval qs = mapM_ evalQuery qs
+eval = mapM_ evalQuery
 
 evalSelectCommand :: SelectCommand -> SQLI Table
 evalSelectCommand q = do
@@ -749,13 +752,13 @@ tableMapEither f t = do
 tableLength :: Table -> Int
 tableLength = length . tableData
 
-evalCreateCommand :: CreateCommand -> SQLI ()
+evalCreateCommand :: CreateCommand -> SQLI Table
 evalCreateCommand (CreateCommand ifnotexists namecreate idcreate) = do
   tableMaybe <- getTable namecreate
   table <- evalIDCreate idcreate
   if ifnotexists && isJust tableMaybe
-    then return ()
-    else void (setScope namecreate table)
+    then return emptyTable
+    else setScope namecreate table >> return table
 
 evalIDCreate :: [(Name, DType, Bool)] -> SQLI Table
 evalIDCreate idcreate = do
@@ -769,9 +772,10 @@ evalIDCreate idcreate = do
         Right var -> return (var, dtype)
         Left _ -> throwError "Fail to parse name"
 
-evalDeleteCommand :: DeleteCommand -> SQLI ()
+evalDeleteCommand :: DeleteCommand -> SQLI Table
 evalDeleteCommand (DeleteCommand fromdelete whdelete) = do
   delScope fromdelete
+  return emptyTable
 
 {- let pkList = List.foldr (\x acc -> parseIDCreate x) idcreate
  in let indexName = List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate in
