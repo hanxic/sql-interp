@@ -103,12 +103,12 @@ getTable tn = do
     Just table -> return $ Just (tn, table)
     _ -> return Nothing
 
-setScope :: TableName -> Table -> SQLI ()
+setScope :: TableName -> Table -> SQLI Store
 setScope tn t = do
   store <- S.get
   let newScope = Map.insert tn t $ scope store
    in let newStore = Store newScope (alias store)
-       in S.put newStore
+       in S.put newStore >> return newStore
 
 delScope :: TableName -> SQLI ()
 delScope tn = do
@@ -755,7 +755,7 @@ evalCreateCommand (CreateCommand ifnotexists namecreate idcreate) = do
   table <- evalIDCreate idcreate
   if ifnotexists && isJust tableMaybe
     then return ()
-    else setScope namecreate table
+    else void (setScope namecreate table)
 
 evalIDCreate :: [(Name, DType, Bool)] -> SQLI Table
 evalIDCreate idcreate = do

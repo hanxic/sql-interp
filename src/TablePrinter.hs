@@ -99,7 +99,7 @@ ppScope scope =
    in PP.hcat (PP.punctuate (PP.text "\n") (map ppScopeAux tntList))
   where
     ppScopeAux :: (TableName, Table) -> Doc
-    ppScopeAux (tn, table) = ppHLine <> SPP.pp tn <> ppHLine <> PP.text "\n" <> SPP.pp table <> ppHLine <> SPP.pp tn <> ppHLine
+    ppScopeAux (tn, table) = ppHLine <> SPP.pp tn <> ppHLine <> PP.text "\n" <> SPP.pp table <> PP.text "\n" <> ppHLine <> SPP.pp tn <> ppHLine
     ppHLine :: Doc
     ppHLine = PP.text "--------"
 
@@ -114,8 +114,8 @@ ppAlias alias =
 instance SPP.PP Store where
   pp (Store scope alias) = ppScope scope <> PP.text "\n" <> ppAlias alias
 
-printTable :: Store -> String
-printTable = pretty
+printStore :: Store -> String
+printStore = pretty
 
 {- PP.cat
   (map (ppLine . ppRow indices) td) -}

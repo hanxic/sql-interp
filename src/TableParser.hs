@@ -289,6 +289,9 @@ tableP pk iName = do
   tableData <- ([] <$ (many P.space *> P.eof)) <|> P.sepBy (rowP ah <* spacesP) newLineP
   return (Table pk iName tableData)
 
+parseCSVFile :: PrimaryKeys -> IndexName -> String -> IO (Either P.ParseError Table)
+parseCSVFile pk iName = P.parseFromFile (const <$> tableP pk iName <*> P.eof)
+
 test_all :: IO Counts
 test_all =
   runTestTT $

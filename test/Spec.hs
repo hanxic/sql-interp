@@ -8,12 +8,8 @@ import TestInterpretation
 
 main :: IO ()
 main = do
-  putStrLn "Test suite not yet implemented"
-  baseQueries <- loadBaseFile
-  case baseQueries of
+  putStrLn "SQL-Interp Test suites "
+  noneOSetupStore <- loadSetup
+  case noneOSetupStore of
     Nothing -> return ()
-    Just qs -> putStrLn $ SP.printQueries qs
-  baseStore <- loadBaseStore INTERP.emptyStore
-  case baseStore of
-    Nothing -> return ()
-    Just store -> putStrLn $ TP.printTable store
+    Just setupStore -> putStrLn $ TP.printStore setupStore
