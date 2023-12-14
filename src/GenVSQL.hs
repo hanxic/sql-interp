@@ -17,18 +17,6 @@ import Test.QuickCheck
 import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen
 
--- generate tables
---   - generate index
---   - generate columns, dtypes
---   - generate values
--- generate store
---   - generate names
---   - match tables
--- generate query
---   - based on tables
---   - based on columns in certain tables
---   - based on dtypes
-
 data GenState = GenState
   { numMaxVar :: Int,
     numMaxTable :: Int,
@@ -48,8 +36,6 @@ initGenState =
 genVarList :: Int -> [Var]
 genVarList n = List.map (\x -> VarName ("var" ++ show x)) [1 .. n]
 
---      Dot ("table" ++ show n) ("var" ++ show n)
-
 sublist1Of :: (Ord a) => [a] -> Gen [a]
 sublist1Of xs = do
   i <- QC.chooseInt (1, length xs)
@@ -66,17 +52,17 @@ genColumns vs ts = do
 genPrimaryKeys :: [(Var, DType)] -> Gen PrimaryKeys
 genPrimaryKeys vs = NE.singleton <$> QC.elements vs
 
--- genDValNull :: DType -> Gen DValue
--- genDValNull (IntType i) = do
---   n <- genPos
---   QC.frequency [(n, IntVal <$> QC.chooseInt (1, 2 ^ i)), (1, pure NullVal)]
--- genDValNull (StringType i) = do
---   n <- genPos
---   QC.frequency [(n, StringVal <$> (genStringLit `QC.suchThat` (\s -> length s <= i))), (1, pure NullVal)]
--- genDValNull BoolType = do
---   n <- genPos
---   QC.frequency
---     [(n, BoolVal <$> arbitrary), (1, pure NullVal)]
+genDValNull :: DType -> Gen DValue
+genDValNull (IntType i) = do
+  n <- genPos
+  QC.frequency [(n, IntVal <$> QC.chooseInt (1, 2 ^ i)), (1, pure NullVal)]
+genDValNull (StringType i) = do
+  n <- genPos
+  QC.frequency [(n, StringVal <$> (genStringLit `QC.suchThat` (\s -> length s <= i))), (1, pure NullVal)]
+genDValNull BoolType = do
+  n <- genPos
+  QC.frequency
+    [(n, BoolVal <$> arbitrary), (1, pure NullVal)]
 
 genDVal :: DType -> Gen DValue
 genDVal (IntType i) = IntVal <$> QC.chooseInt (1, 2 ^ i)
@@ -298,10 +284,12 @@ genSelectAdvanced g = do
   let idxNames = List.concatMap indexName tables
   let scope = Map.fromList (tableList `zip` tables)
 
+  fromTable <- QC.elements (Map.keys columns)
   fromExpr <- genFromExpr (Map.keys columns)
   countStyle <- arbitrary :: Gen CountStyle
   colExpr <- QC.vectorOf (numMaxVar g) $ genColumnExpr (numMaxExpr g) idxNames
 
+  order <- genOrderBy varList
   limit <- QC.chooseInt (1, numMaxRow g)
   offset <- QC.chooseInt (1, numMaxRow g)
 
@@ -318,31 +306,17 @@ genSelectAdvanced g = do
         }
     )
 
-genOrderBy :: [Var] -> [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
-genOrderBy vs = undefined
-
--- genOrderBy vs = do
---   v <- QC.elements vs
---   ads <- arbitrary :: Gen OrderTypeAD
---   fls <- QC.maybeGen (arbitrary :: Gen OrderTypeFL)
---   return [(v, Just ads, fls)]
+genOrderBy :: [Var] -> Gen [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
+genOrderBy vs = do
+  v <- QC.elements vs
+  ads <- arbitrary :: Gen OrderTypeAD
+  fls <- arbitrary :: Gen OrderTypeFL
+  maybeFls <- QC.elements [Just fls, Nothing]
+  return [(v, Just ads, maybeFls)]
 
 genSelect :: Gen (Scope, SelectCommand)
 genSelect =
   QC.oneof
     [ genSelectBasic initGenState,
-      genSelectGroupBy initGenState,
-      genSelectJoin initGenState,
-      genSelectAdvanced initGenState
+      genSelectGroupBy initGenState
     ]
-
--- data SelectCommand = SelectCommand
--- { exprsSelect :: (CountStyle, [ColumnExpression]),
---   fromSelect :: FromExpression,
---   whSelect :: Maybe Expression,
---   groupbySelect :: [Var],
---   orderbySelect :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)],
---   limitSelect :: Maybe Int,
---   offsetSelect :: Maybe Int
--- }
--- deriving (Eq, Show)
