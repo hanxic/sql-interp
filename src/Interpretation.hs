@@ -369,7 +369,10 @@ evalSelectCommand q = do
   tableGroupBy <- evalGroupBySelect1 (groupbySelect q) (exprsSelect q) tableWhere
   tableOrder <- evalOrderBy (orderbySelect q) tableGroupBy
   tableOffset <- evalOffset (offsetSelect q) tableOrder
-  evalLimit (limitSelect q) tableOffset
+  tableResult <- evalLimit (limitSelect q) tableOffset
+  freename <- getFreeName
+  setScope freename tableResult
+  return tableResult
 
 {-   tableGroupBy <- evalGroupBySelect (groupbySelect q) (exprsSelect q) tableWhere
   tableOffset <- evalOffset (offsetSelect q) tableGroupBy

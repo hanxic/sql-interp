@@ -6,6 +6,8 @@ import Interpretation
 import SQLParser
 import SQLPrinter
 import SQLSyntax
+import System.Directory (doesPathExist)
+import System.IO
 import TableParser
 import TablePrinter
 import TableSyntax
@@ -152,22 +154,17 @@ loop = do
             else do
               case queriesQueue clmemory of
                 [] -> putStrLnCLIO "Error: Nothing to run"
-                (q : qs) ->
+                (q : qs) -> do
+                  setQueriesQueue qs
                   let store = stack clmemory
                    in let (output, store') = run (evalQuery q) store
-                       in let freenameEither = interp getFreeName store
-                           in case output of
-                                Left errMsg -> putStrLnCLIO errMsg >> putStrLnCLIO (TablePrinter.pretty store')
-                                Right table -> do
-                                  setHistory $ Just clmemory
-                                  ( case freenameEither of
-                                      Left errMsg -> putStrLnCLIO (TablePrinter.pretty table) >> putStrLnCLIO "unable to store"
-                                      Right freename ->
-                                        case interp (setScope freename table) (stack clmemory) of
-                                          Left errMsg -> putStrLnCLIO (TablePrinter.pretty table) >> putStrLnCLIO errMsg
-                                          Right newStore -> putStrLnCLIO (TablePrinter.pretty table)
-                                    )
-                                  multiStepper (n - 1)
+                       in case output of
+                            Left errMsg -> putStrLnCLIO errMsg >> putStrLnCLIO (TablePrinter.pretty store')
+                            Right table -> do
+                              setHistory $ Just clmemory
+                              setStack store'
+                              putStrLnCLIO (TablePrinter.pretty table)
+                              multiStepper (n - 1)
     Just (":back", strs) -> do
       clmemory <- get
       let numSteps :: Int
@@ -193,15 +190,39 @@ loop = do
     Just (":stack", _) -> do
       stack <- getStack
       putStrLnCLIO (SQLPrinter.pretty stack)
+      loop
+    Just (":redirect", [fn]) -> do
+      pathExists <- lift $ doesPathExist fn
+      if pathExists
+        then setOutputLoc (File fn) >> putStrLnCLIO ("Redirect successful to " ++ fn) >> loop
+        else setOutputLoc Terminal >> putStrLnCLIO "Redirect to Terminal" >> loop
+    Just (":output", [tn]) -> do
+      stack <- getStack
+      case interp (getTable tn) stack of
+        Left errMsg -> putStrLnCLIO errMsg >> loop
+        Right Nothing -> putStrLnCLIO "Error: Cannot find table" >> loop
+        Right (Just (_, table)) -> do
+          outputloc <- getOutputLoc
+          case outputloc of
+            Terminal -> putStrLnCLIO (TablePrinter.pretty table) >> loop
+            File fn -> lift (appendFile fn (TablePrinter.pretty table)) >> loop
     _ ->
       case SQLParser.parseSQL str of
         Right queries -> do
           stack <- getStack
           let v = interp (eval queries) stack
-           in undefined
+           in loop
         Left _s -> do
           putStrCLIO $ "Command Line Error: " ++ _s
           loop
+
+fetchTable :: TableName -> ((TableName, Table) -> CLIO ()) -> CLIO () -> CLIO ()
+fetchTable tn clio loop = do
+  stack <- getStack
+  case interp (getTable tn) stack of
+    Left errMsg -> putStrLnCLIO errMsg >> loop
+    Right Nothing -> putStrLnCLIO "Error: Cannot find table" >> loop
+    Right (Just result) -> clio result
 
 prompt :: CLIO ()
 prompt = do
