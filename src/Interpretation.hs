@@ -222,8 +222,8 @@ testJoinMidRes1 =
 
 test_joinMid :: Test
 test_joinMid =
-  "evaluate Op2" ~:
-    TestList
+  "evaluate Op2"
+    ~: TestList
       [ interp (joinMid (tableData tableSampleGrades) (tableData tableSampleStudents) <$> getJoinSpec "Students" "Grades" [(Dot "Students" $ VarName "student_id", Dot "Grades" $ VarName "student_id")]) sampleStore ~?= Right testJoinMidRes1
       ]
 

@@ -70,6 +70,7 @@ instance PP DValue where
 -- ""
 
 instance PP DType where
+  pp :: DType -> Doc
   pp (StringType i) = PP.text $ "VARCHAR(" <> show i <> ")"
   pp (IntType i)
     | i == 16 = PP.text "INTEGER"
@@ -83,11 +84,13 @@ instance PP Function where
     pp (Max cs e) = PP.text "MAX" <+> PP.parens (pp cs <+> pp e)
     pp (Min cs e) = PP.text "MIN" <+> PP.parens (pp cs <+> pp e)
     pp (Sum cs e) = PP.text "SUM" <+> PP.parens (pp cs <+> pp e) -}
+  pp :: Function -> Doc
   pp Len = PP.text "LENGTH"
   pp Lower = PP.text "LOWER"
   pp Upper = PP.text "UPPER"
 
 instance PP AggFunction where
+  pp :: AggFunction -> Doc
   pp Avg = PP.text "AVG"
   pp Count = PP.text "COUNT"
   pp Max = PP.text "MAX"
@@ -95,10 +98,12 @@ instance PP AggFunction where
   pp Sum = PP.text "SUM"
 
 instance PP Uop where
+  pp :: Uop -> Doc
   pp Not = PP.text "NOT"
   pp Neg = PP.char '-'
 
 instance PP Bop where
+  pp :: Bop -> Doc
   pp Plus = PP.char '+'
   pp Minus = PP.char '-'
   pp Times = PP.char '*'
@@ -115,6 +120,7 @@ instance PP Bop where
   pp Is = PP.text "IS"
 
 instance PP Expression where
+  pp :: Expression -> Doc
   pp (Var v) = pp v
   pp (Val v) = pp v
   pp (Op1 o v) = pp o <+> if isBase v then pp v else PP.parens (pp v)
@@ -131,6 +137,7 @@ instance PP Expression where
     pp f <> PP.parens (pp cs <+> pp exp)
 
 instance PP JoinStyle where
+  pp :: JoinStyle -> Doc
   pp LeftJoin = PP.text "LEFT JOIN"
   pp RightJoin = PP.text "RIGHT JOIN"
   pp InnerJoin = PP.text "JOIN"
@@ -144,6 +151,7 @@ isBaseFromExpression (TableRef _) = True
 isBaseFromExpression _ = False
 
 instance PP Var where
+  pp :: Var -> Doc
   pp (VarName name) = PP.text name
   pp (Dot n v) = pp n <> PP.char '.' <> pp v
 
@@ -159,6 +167,7 @@ renderJoinNames =
     . map (\(n1, n2) -> pp n1 <> PP.text "=" <> pp n2)
 
 instance PP FromExpression where
+  pp :: FromExpression -> Doc
   pp (TableRef texp) = pp texp
   pp (TableAlias texp var) = pp texp <+> PP.text "AS" <+> pp var
   {- pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc -}
@@ -186,10 +195,12 @@ instance PP FromExpression where
          in ppExp1 <+> pp js <+> ppExp2 -}
 
 instance PP CountStyle where
+  pp :: CountStyle -> Doc
   pp Distinct = PP.text "DISTINCT"
   pp All = PP.empty
 
 instance PP ColumnExpression where
+  pp :: ColumnExpression -> Doc
   pp (ColumnName exp) = pp exp
   pp (ColumnAlias exp v) = pp exp <+> PP.text "AS" <+> pp v
   pp AllVar = PP.text "*"
@@ -246,9 +257,11 @@ ppOB (v, o1, o2) =
   pp v <+> pp o1 <+> pp o2
 
 instance PP SelectCommand where
+  pp :: SelectCommand -> Doc
   pp = ppFullQuery . ppSelectCommandAux
 
 instance PP CreateCommand where
+  pp :: CreateCommand -> Doc
   pp (CreateCommand ine name ids) =
     ppFullQuery $
       PP.text "CREATE TABLE"
@@ -269,6 +282,7 @@ instance PP CreateCommand where
           )
 
 instance PP DeleteCommand where
+  pp :: DeleteCommand -> Doc
   pp (DeleteCommand fr wh) =
     ppFullQuery $
       PP.text
@@ -292,10 +306,12 @@ instance PP UpsertIntoCommand where
             <+> (PP.text "VALUES" <> PP.parens (ppList PP.comma $ map pp vals))
 
 instance PP AlterTableCommand where
+  pp :: AlterTableCommand -> Doc
   pp (AlterTableCommand fr ve co) =
     PP.text "ALTER TABLE" <+> pp fr <+> pp ve <+> pp co --- TODO: This is buggy
 
 instance PP Query where
+  pp :: Query -> Doc
   pp (SelectQuery sc) = pp sc
   pp (DeleteQuery dc) = pp dc
   pp (CreateQuery cc) = pp cc
@@ -308,6 +324,7 @@ printQueries = PP.render . prettyPrintQueries
 
 -- TODO: Add nested to make sure not over 80 words
 
+test101 :: ColumnExpression
 test101 = ColumnAlias (Var (Dot "Table1" (VarName "Var4"))) "(1j"
 
 -- >>> pretty test101

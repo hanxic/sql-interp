@@ -4,6 +4,7 @@ import Control.Monad.State
 import Data.List as List
 import Data.Map as Map
 import Data.Maybe
+import GenVSQL
 import Interpretation
 import SQLSyntax
 import TableSyntax
@@ -79,20 +80,6 @@ hasJoinFrom :: FromExpression -> Bool
 hasJoinFrom Join {} = True
 hasJoinFrom _ = False
 
-joinRefs :: SelectCommand -> [TableName]
-joinRefs = joinRefsFrom . fromSelect
-
-joinRefsFrom :: FromExpression -> [TableName]
-joinRefsFrom (Join f1 _ f2 _) = joinRefsInner f1 ++ joinRefsInner f2
-joinRefsFrom (SubQuery sc) = joinRefs sc
-joinRefsFrom _ = []
-
-joinRefsInner :: FromExpression -> [TableName]
-joinRefsInner (TableRef n) = [n]
-joinRefsInner (TableAlias n _) = [n]
-joinRefsInner (Join f1 _ f2 _) = joinRefsInner f1 ++ joinRefsInner f2
-joinRefsInner (SubQuery sc) = []
-
 -- Build map of Selected columns
 
 mapTableVars :: Scope -> Map TableName IndexName
@@ -161,14 +148,6 @@ varMatchName :: Name -> Var -> Bool
 varMatchName n (Dot t v) = n == t
 varMatchName _ _ = False
 
--- TODO
-optimizeMultiJoin :: SelectCommand -> SelectCommand
-optimizeMultiJoin sc =
-  let joinRefsList = joinRefs sc
-   in if length joinRefsList > 2
-        then sc
-        else sc
-
 -- Main optimization
 
 runOptimization :: (SelectCommand -> SelectCommand) -> SelectCommand -> SelectCommand
@@ -179,26 +158,34 @@ runFromExprOpt opt (SubQuery sc) = SubQuery $ runOptimization opt sc
 runFromExprOpt _ f = f
 
 optimzationList :: [SelectCommand -> SelectCommand]
-optimzationList = [optimizeMultiJoin, optimizeWhereJoin, optimizeFromId]
+optimzationList = [optimizeFromId, optimizeWhereJoin]
 
 mainOptimization :: SelectCommand -> SelectCommand
 mainOptimization = undefined
 
 -- Property-based Testing
 
-checkEval :: SelectCommand -> SelectCommand -> Bool
-s1 `checkEval` s2 = interp (evalSelectCommand s1) sampleStore == interp (evalSelectCommand s2) sampleStore
+storeId :: Scope -> Store
+storeId sc =
+  Store
+    { scope = sc,
+      alias = Map.empty
+    }
 
-prop_optimizeFromId :: SelectCommand -> Bool
-prop_optimizeFromId sc = optimizeFromId sc `checkEval` sc
+interpEquality :: (SelectCommand -> SelectCommand) -> QC.Property
+interpEquality opt = QC.forAll genSelect $ \(scope, query) ->
+  interp (evalSelectCommand query) (storeId scope) == interp (evalSelectCommand $ opt query) (storeId scope)
 
-prop_optimizeWhereJoin :: SelectCommand -> Bool
-prop_optimizeWhereJoin sc = optimizeWhereJoin sc `checkEval` sc
+prop_optimizeFromId :: QC.Property
+prop_optimizeFromId = interpEquality optimizeFromId
 
-prop_optimizeMultiJoin :: SelectCommand -> Bool
-prop_optimizeMultiJoin sc = optimizeMultiJoin sc `checkEval` sc
+prop_optimizeWhereJoin :: QC.Property
+prop_optimizeWhereJoin = interpEquality optimizeWhereJoin
 
 -- Unit-tests
+
+checkSampleEval :: SelectCommand -> SelectCommand -> Bool
+s1 `checkSampleEval` s2 = interp (evalSelectCommand s1) sampleStore == interp (evalSelectCommand s2) sampleStore
 
 sampleQuery :: SelectCommand
 sampleQuery =
