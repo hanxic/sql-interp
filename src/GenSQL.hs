@@ -102,6 +102,7 @@ instance Arbitrary DType where
         (1, pure BoolType)
       ]
 
+-- | Generate expression within a specific size
 genExp :: Int -> Gen Expression
 genExp n
   | n <= 0 =
@@ -116,12 +117,14 @@ genExp n =
     ]
   where
     n' = n `div` 2
+    -- Need to first infer the function type and generate the needed expression
     genFun :: Gen Expression
     genFun =
       arbitrary
         >>= ( \f ->
                 Fun f <$> genExpTC (inferFunctionType f)
             )
+    -- Need to first infer the aggregate function type and generate the needed expression
     genAggFun :: Gen Expression
     genAggFun =
       arbitrary
@@ -130,33 +133,18 @@ genExp n =
                   <$> arbitrary
                   <*> genExpTC (inferAggFunctionType f)
             )
+    -- Base case
     genExpTC :: DType -> Gen Expression
     genExpTC t =
       QC.frequency
         [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
 
+-- | Arbitrary instance for expression
 instance Arbitrary Expression where
   arbitrary :: Gen Expression
   arbitrary = QC.sized genExp
 
--- Scratch paper for function instance
-{- let genExpTC =
-      (=<<)
-        ( \t ->
-            QC.frequency
-              [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
-        )
- in QC.frequency
-      [ (1, Avg <$> arbitrary <*> genExpTC genIntType),
-        (1, Count <$> arbitrary <*> genExpTC genIntType),
-        (1, Max <$> arbitrary <*> genExpTC genIntType),
-        (1, Min <$> arbitrary <*> genExpTC genIntType),
-        (1, Sum <$> arbitrary <*> genExpTC genIntType),
-        (1, Len <$> genExpTC genStringType),
-        (1, Lower <$> genExpTC genStringType),
-        (1, Upper <$> genExpTC genStringType)
-      ] -}
-
+-- | Generator for from expression
 genFromExpression :: Int -> Gen FromExpression
 genFromExpression n | n <= 0 = TableRef <$> (QC.elements =<< genTablePool)
 genFromExpression n =
@@ -167,23 +155,24 @@ genFromExpression n =
   where
     n' = n `div` 2
 
-{-       (1, SubQuery <$> arbitrary),-}
+-- | Arbitrary instance for from expression
 instance Arbitrary FromExpression where
   arbitrary :: Gen FromExpression
   arbitrary = do
     n <- QC.sized (\x -> QC.chooseInt (1, x))
-    {- QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)] -}
     QC.sized genFromExpression
 
+-- | Arbitrary instances for column expression
 instance Arbitrary ColumnExpression where
   arbitrary :: Gen ColumnExpression
   arbitrary =
     QC.frequency
       [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
-        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> (QC.elements =<< genTablePool)), -- This will cause some problem if alias is something that is invalid
+        (1, ColumnAlias <$> (arbitrary >>= patchWVar) <*> (QC.elements =<< genTablePool)),
         (1, return AllVar)
       ]
 
+-- | A patching function to make sure that there exists some variable in the provided expression
 patchWVar :: Expression -> Gen Expression
 patchWVar e@(Var _) = return e
 patchWVar (Val _) = Var <$> arbitrary
@@ -198,24 +187,7 @@ patchWVar (Op2 e1 u e2) =
 patchWVar (AggFun af cs e) = AggFun af cs <$> patchWVar e
 patchWVar (Fun f e) = Fun f <$> patchWVar e
 
-constrainSize1 :: Int -> Gen a -> Gen [a]
-constrainSize1 n g | n <= 0 = (: []) <$> g
-constrainSize1 n g = do
-  x <- g
-  xs <- constrainSize1 n' g
-  return $ x : xs
-  where
-    n' = n `div` 2
-
-constrainSize :: Int -> Gen a -> Gen [a]
-constrainSize n _ | n <= 0 = return []
-constrainSize n g = do
-  x <- g
-  xs <- constrainSize n' g
-  return $ x : xs
-  where
-    n' = n `div` 2
-
+-- | Generating SelectCommand
 genSelectCommand :: Int -> Gen SelectCommand
 genSelectCommand n =
   SelectCommand
@@ -229,26 +201,13 @@ genSelectCommand n =
   where
     n' = n `div` 2
 
-test232 :: Gen [(CountStyle, ColumnExpression)]
-test232 = atLeastN 1 (arbitrary :: Gen (CountStyle, ColumnExpression))
-
--- >>> QC.sample test232
-
-test17 = show [1, 2, 3]
-
--- >>> test17
--- "[1,2,3]"
-
+-- | Arbitrary instance for SelectCommand
 instance Arbitrary SelectCommand where
   arbitrary :: Gen SelectCommand
   arbitrary =
     QC.sized genSelectCommand
 
-atLeastN :: Int -> Gen a -> Gen [a]
-atLeastN i g = do
-  n <- QC.sized (\n -> QC.chooseInt (i, n))
-  constrainSize1 n g
-
+-- | Arbitrary instance for CreateCommand
 instance Arbitrary CreateCommand where
   arbitrary :: Gen CreateCommand
   arbitrary =
@@ -264,6 +223,7 @@ instance Arbitrary CreateCommand where
             )
         )
 
+-- | Arbitrary instance for DeleteCommand
 instance Arbitrary DeleteCommand where
   arbitrary :: Gen DeleteCommand
   arbitrary =
@@ -271,6 +231,7 @@ instance Arbitrary DeleteCommand where
       <$> (QC.elements =<< genTablePool)
       <*> arbitrary
 
+-- | Arbitrary instance for Query
 instance Arbitrary Query where
   arbitrary :: Gen Query
   arbitrary =
@@ -280,10 +241,9 @@ instance Arbitrary Query where
         (1, DeleteQuery <$> arbitrary)
       ]
 
--- ******** Table Generator ********
+---------- Table Generator --------
 
-type AnnotatedHeader = IndexName
-
+-- | Given an annotated header (column name, type), generate a row
 genRowFromAH :: AnnotatedHeader -> Gen Row
 genRowFromAH [] = return Map.empty
 genRowFromAH ((var, dtype) : xs) = do
@@ -291,7 +251,7 @@ genRowFromAH ((var, dtype) : xs) = do
   rest <- genRowFromAH xs
   return (Map.singleton var dvalue `Map.union` rest)
 
-{- Generate Table -}
+-- | Generate a list of variable and type as the non-primary keys header of the table
 genIndexName :: Gen [(Var, DType)]
 genIndexName =
   QC.sized
@@ -302,6 +262,7 @@ genIndexName =
         )
     )
 
+-- | Generate an annotated
 genAH :: Gen AnnotatedHeader
 genAH = reverse <$> QC.sized genAHAux
   where
@@ -313,6 +274,7 @@ genAH = reverse <$> QC.sized genAHAux
       var <- genVar n
       return $ (var, dtype) : ah'
 
+-- | Generate the primary keys and index pair
 genPKIN :: Gen (PrimaryKeys, IndexName)
 genPKIN = do
   ah <- genAH
@@ -320,6 +282,7 @@ genPKIN = do
   let (pkList, iName) = splitAt i ah
    in return (NE.fromList pkList, iName)
 
+-- | Given annotated header, generate a table of values with relevant types and values
 genTableData :: AnnotatedHeader -> Gen TableData
 genTableData ah = QC.sized $ genTableDataAux ah
   where
@@ -330,6 +293,7 @@ genTableData ah = QC.sized $ genTableDataAux ah
       rest <- genTableDataAux ah (n `div` 2)
       return $ row : rest
 
+-- | Arbitrary instance for generating primary keys (deprecated)
 instance Arbitrary PrimaryKeys where
   arbitrary :: Gen PrimaryKeys
   arbitrary = do
@@ -337,15 +301,17 @@ instance Arbitrary PrimaryKeys where
     t <- arbitrary :: Gen DType
     return $ NE.singleton (v, t)
 
+-- | Arbitrary instance for generating table (deprecated)
 instance Arbitrary Table where
   arbitrary :: Gen Table
   arbitrary = Table <$> arbitrary <*> genIndexName <*> arbitrary
 
+-- | Arbitrary instance for generating Store
 instance Arbitrary Store where
   arbitrary :: Gen Store
   arbitrary = Store <$> arbitrary <*> arbitrary
 
-{- Arbitrary bounded enum instances -}
+--------- Arbitrary bounded enum instances --------
 instance Arbitrary OrderTypeFL where
   arbitrary :: Gen OrderTypeFL
   arbitrary = QC.arbitraryBoundedEnum
@@ -381,3 +347,31 @@ instance Arbitrary CountStyle where
 instance Arbitrary IndexAttribute where
   arbitrary :: Gen IndexAttribute
   arbitrary = QC.arbitraryBoundedEnum
+
+-------- Customized Generator --------
+
+-- | A helper function that will generate at most 64 pieces of data (greater than zero)
+constrainSize1 :: Int -> Gen a -> Gen [a]
+constrainSize1 n g | n <= 0 = (: []) <$> g
+constrainSize1 n g = do
+  x <- g
+  xs <- constrainSize1 n' g
+  return $ x : xs
+  where
+    n' = n `div` 2
+
+-- | A helper function that will generate at most 64 pieces of data (potentially 0)
+constrainSize :: Int -> Gen a -> Gen [a]
+constrainSize n _ | n <= 0 = return []
+constrainSize n g = do
+  x <- g
+  xs <- constrainSize n' g
+  return $ x : xs
+  where
+    n' = n `div` 2
+
+-- | A helper function for generate at least N (different) copies of data
+atLeastN :: Int -> Gen a -> Gen [a]
+atLeastN i g = do
+  n <- QC.sized (\n -> QC.chooseInt (i, n))
+  constrainSize1 n g

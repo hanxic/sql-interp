@@ -5,7 +5,7 @@ import Data.Char qualified as Char
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
-import GenSQL (AnnotatedHeader)
+import GenSQL
 import SQLPrinter qualified as SPP
 import SQLSyntax
 import TableSyntax

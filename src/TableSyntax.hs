@@ -49,3 +49,5 @@ type GroupByVars = NE.NonEmpty Name
 
 -- This is a temporary data structure and not with actual use in parser / printing
 type Header = [Var] -- True if it is a primary key, and false if not
+
+type AnnotatedHeader = IndexName

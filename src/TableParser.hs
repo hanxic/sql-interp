@@ -15,7 +15,7 @@ import SQLParser qualified as P
 import SQLParser qualified as SP
 import SQLSyntax
 import TablePrinter qualified as TP
-import TableSyntax (Header, IndexName, PrimaryKeys, Row, Table (Table, indexName, primaryKeys, tableData))
+import TableSyntax (AnnotatedHeader, Header, IndexName, PrimaryKeys, Row, Table (Table, indexName, primaryKeys, tableData))
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Text.PrettyPrint (Doc, render)
