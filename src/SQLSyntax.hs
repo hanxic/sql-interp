@@ -13,6 +13,16 @@ import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 
+{-
+SELECT [expression]
+FROM expression
+WHERE
+ORDER BY
+GROUP BY
+HAVING
+JOIN
+-}
+
 data Query
   = SelectQuery SelectCommand
   | DeleteQuery DeleteCommand
@@ -75,11 +85,6 @@ data Var
   = VarName Name
   | Dot Name Var
   deriving (Eq, Show, Ord)
-
--- data Var
---   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
---   | QuotedName Name -- Quoted, can be anything
---   deriving (Eq, Show)
 
 data Uop
   = Not
@@ -146,8 +151,6 @@ data VerbAlter
   = Add Bool
   | DropColumn Bool
 
--- No set
-
 -- **** Section for AlterTableCommand ****
 
 data AlterTableCommand = AlterTableCommand
@@ -178,7 +181,6 @@ data CreateCommand = CreateCommand
   { ifNotExists :: Bool,
     nameCreate :: TableName,
     idCreate :: [(Name, DType, Bool)]
-    -- TODO: Haven't finished
   }
   deriving (Eq, Show)
 
@@ -267,21 +269,3 @@ reservedKeyWords =
 
 reservedChar :: String
 reservedChar = "\"'()`;"
-
-{-
-What do we want to cover?
-SELECT [expression]
-FROM expression
-WHERE
-ORDER BY
-GROUP BY
-HAVING
-JOIN
--}
-{-
-Must have a select, and must have a from
-The rest are optional...Applicative
-How about Data definition statement
-+ Manipulation statement
-+ Use the exception transformer stufff
--}

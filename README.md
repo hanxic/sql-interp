@@ -45,8 +45,26 @@ We divide the project into the following three categories of functionality:
 
 ## Example Usage
 
+### Upload a Table
+
 ```bash
-ABC
+ghci> commandLine
+SQL-Interp> 
+ghci> 
+ghci> 
+ghci> 
+ghci> 
+```
+
+### Execute a Query
+
+```bash
+ghci> commandLine
+SQL-Interp> 
+ghci> 
+ghci> 
+ghci> 
+ghci> 
 ```
 
 ## Next Steps

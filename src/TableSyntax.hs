@@ -7,6 +7,7 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
 import SQLSyntax
 
+-- The context of available named tables which queries can reference
 data Store = Store
   { scope :: Scope,
     alias :: Map TableName TableName
@@ -17,6 +18,7 @@ type Alias = Map TableName TableName
 
 type Scope = Map TableName Table
 
+-- A table consists of an TableData (ordered List of Rows)
 data Table = Table
   { primaryKeys :: PrimaryKeys,
     indexName :: IndexName,
