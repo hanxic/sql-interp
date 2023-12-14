@@ -1,6 +1,6 @@
 CREATE TABLE answer
 (
   order_id INTEGER PRIMARY KEY,
-  amount INTEGER,
-  customer_id INTEGER
+  amount INTEGER PRIMARY KEY,
+  customer_id INTEGER PRIMARY KEY
 );

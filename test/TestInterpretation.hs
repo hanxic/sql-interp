@@ -60,7 +60,7 @@ data OutputLoc
   = File FilePath
   | Terminal
 
-testedit = " "
+testedit = "  "
 
 getStack :: IOS Stack
 getStack = do gets stack
@@ -231,7 +231,7 @@ runTestCases = do
 
 {- setupEnv (testPath </> "test1") "answer" "answer" -}
 
-test103 = SPAR.parseSQLFile (testPath </> "test3" </> "test3" -<.> sqlformat)
+{- test103 = SPAR.parseSQLFile (testPath </> "test3" </> "test3" -<.> sqlformat)
 
 test104 = SPAR.parseSQLFile (testPath </> "test4" </> "answer" -<.> sqlformat)
 
@@ -240,7 +240,7 @@ test104 = SPAR.parseSQLFile (testPath </> "test4" </> "answer" -<.> sqlformat)
 
 test109 = [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("\"COUNT(order_id)\"", IntType 16, True)]})]
 
-test108 = exec (eval test109) emptyStore
+test108 = exec (eval test10) emptyStore
 
 -- >>> test108
 -- Store {scope = fromList [("answer",Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = []})], alias = fromList []}
@@ -249,7 +249,7 @@ test107 = TPAR.parseCSVFile (NE.fromList [(VarName "order_id", IntType 16)]) [(V
 
 -- >>> test107
 -- Left "No parses"
-
+ -}
 -- loadTest
 testcases :: [(FilePath, String, String, String)]
 testcases =
@@ -259,7 +259,10 @@ testcases =
       ("test2", "answer", "answer", "test2"),
       ("test3", "answer", "answer", "test3"),
       ("test4", "answer", "answer", "test4"),
-      ("test5", "answer", "answer", "test5")
+      ("test5", "answer", "answer", "test5"),
+      ("test6", "answer", "answer", "test6"),
+      ("test7", "answer", "answer", "test7"),
+      ("test8", "answer", "answer", "test8")
     ]
 
 {- loadSetupFile :: IO (Maybe Queries)

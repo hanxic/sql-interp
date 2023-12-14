@@ -1,3 +1,3 @@
-SELECT COUNT(order_id)
+SELECT amount, COUNT(order_id)
 FROM Orders
 GROUP BY amount;
