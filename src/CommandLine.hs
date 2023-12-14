@@ -92,6 +92,9 @@ loadScript scriptPath = do
     Left errMsg -> lift $ putStrLn errMsg
     Right qs -> appQueriesQueue qs
 
+commandline :: IO ()
+commandline = evalStateT loop initialCLMemory
+
 loop :: CLIO ()
 loop = do
   prompt

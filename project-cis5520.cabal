@@ -55,6 +55,7 @@ library
       SQLPrinter
       SQLSyntax
       Utils
+      CommandLine
   hs-source-dirs:
       src
 

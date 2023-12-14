@@ -1,6 +1,0 @@
-order_id,item,amount,first_name,last_name,age,country
-1,Keyboard,400,John,Reinhardt,25,UK
-2,Mouse,300,John,Reinhardt,25,UK
-3,Monitor,12000,David,Robinson,22,UK
-4,Keyboard,400,John,Doe,31,USA
-5,Mousepad,250,Robert,Luna,22,USA

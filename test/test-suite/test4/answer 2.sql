@@ -1,5 +1,0 @@
-CREATE TABLE answer
-(
-  amount INTEGER PRIMARY KEY,
-  "COUNT(order_id)" INT(32) PRIMARY KEY
-);
