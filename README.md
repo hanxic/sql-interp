@@ -1,6 +1,6 @@
 # CIS 5520 Final Project
 
-We propose creating a compiler for a domain-specific language embedded in Structured Query Language (SQL) using functional goodness of the Haskell. Our project aims to achieve the following goals:
+We propose creating an interpreter for a domain-specific language embedded in Structured Query Language (SQL) using functional goodness of the Haskell. Our project aims to achieve the following goals:
 
 1. Build a SQL-like language that will facilitate the query process for all users, especially beginner users: Compared to R (tidyverse) and Python (pandas), SQL has a more intuitive syntax. This project plans to leverage the intuitiveness of SQL syntax in creating an easy-to-understand domain-specific language for database queries.
 2. Provide a query optimization library with property-based testing checks: The project will also provide a simple library that, given the abstract syntax tree of our language, can perform certain query optimization such as filtering and avoiding selecting unnecessary columns / rows to improve simple optimization. The optimization library is expected to be tested using QuickCheck.

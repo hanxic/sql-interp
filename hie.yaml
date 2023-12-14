@@ -1,8 +1,8 @@
 cradle:
   stack:
     - path: ./test
-      component: "sql-interp:test:sql-interp-test"
+      component: "project-cis5520:test:project-cis5520-test"
     - path: ./src
-      component: "sql-interp:lib"
+      component: "project-cis5520:lib"
     - path: ./app
-      component: "sql-interp:exe:sql-interp-exe"
+      component: "project-cis5520:exe:project-cis5520-exe"

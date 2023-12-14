@@ -1,9 +1,9 @@
 cabal-version:  2.2
-name:           sql-interp
+name:           project-cis5520
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/sql-interp#readme>
-homepage:       https://github.com/githubuser/sql-interp#readme
-bug-reports:    https://github.com/githubuser/sql-interp/issues
+description:    Please see the README on GitHub at <https://github.com/githubuser/project-cis5520#readme>
+homepage:       https://github.com/githubuser/project-cis5520#readme
+bug-reports:    https://github.com/githubuser/project-cis5520/issues
 author:         Author name here
 maintainer:     example@example.com
 copyright:      2022 Author name here
@@ -16,7 +16,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/sql-interp
+  location: https://github.com/hanxic/project-cis5520
 
 common common-stanza
   ghc-options:         -Wno-type-defaults -fwarn-incomplete-patterns
@@ -25,12 +25,15 @@ common common-stanza
     , HUnit 
     , QuickCheck
     , containers
+    , ordered-containers
     , filepath
     , pretty
     , network
     , directory
     , random
-    , mtl
+    , mtl,
+    fin,
+    regex-base, regex-posix
   default-language:
     GHC2021
   default-extensions:
@@ -41,10 +44,22 @@ library
       common-stanza
   exposed-modules:
       Parser
+      GenSQL
+      GenVSQL
+      Interpretation
+      TableSyntax
+      TableParser
+      TablePrinter
+      Optimization
+      SQLParser
+      SQLPrinter
+      SQLSyntax
+      Utils
+      CommandLine
   hs-source-dirs:
       src
 
-executable sql-interp-exe
+executable project-cis5520-exe
   import:
       common-stanza
   main-is: 
@@ -53,19 +68,24 @@ executable sql-interp-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      sql-interp
+      project-cis5520
 
 
-test-suite sql-interp-test
+test-suite project-cis5520-test
   import:
       common-stanza
   type: 
       exitcode-stdio-1.0
   main-is: 
       Spec.hs
+  other-modules:
+      TestInterpretation
+      TestOptimization
+      TestTable
+      TestSQL
+      TestUtils
   hs-source-dirs:
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      sql-interp
-
+      project-cis5520

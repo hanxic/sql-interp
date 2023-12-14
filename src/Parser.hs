@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 -- | A small, applicative-based parsing library
 -- NOTE: this library does not export the `P` data constructor.
 -- All `Parser`s must be built using the following functions
@@ -19,6 +17,7 @@ module Parser
     digit,
     upper,
     lower,
+    underscore,
     space,
     char,
     string,
@@ -29,6 +28,14 @@ module Parser
     between,
     sepBy1,
     sepBy,
+    lookAhead,
+    endOfWord,
+    fullString,
+    maybeParse,
+    anyChar,
+    anyWord,
+    comma,
+    equalSign,
   )
 where
 
@@ -66,6 +73,15 @@ instance Alternative Parser where
 
   (<|>) :: Parser a -> Parser a -> Parser a
   p1 <|> p2 = P $ \s -> doParse p1 s `firstJust` doParse p2 s
+
+instance Monad Parser where
+  return :: a -> Parser a
+  return = pure
+
+  (>>=) :: Parser a -> (a -> Parser b) -> Parser b
+  p1 >>= p2 = P $ \s -> do
+    (c, cs) <- doParse p1 s
+    doParse (p2 c) cs
 
 -- | Combine two Maybe values together, producing the first
 -- successful result
@@ -126,22 +142,66 @@ satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = filter p get
 
 -- | Parsers for specific sorts of characters
-alpha, digit, upper, lower, space :: Parser Char
+alpha, digit, upper, lower, space, underscore :: Parser Char
 alpha = satisfy isAlpha
 digit = satisfy isDigit
 upper = satisfy isUpper
 lower = satisfy isLower
 space = satisfy isSpace
+underscore = char '_'
+
+comma = char ','
+
+equalSign :: Parser Char
+equalSign = char '='
 
 -- | Parses and returns the specified character
 -- succeeds only if the input is exactly that character
 char :: Char -> Parser Char
 char c = satisfy (c ==)
 
+anyChar :: Parser Char
+anyChar = filter (not . isSpace) (satisfy isPrint)
+
+anyWord :: Parser String
+anyWord = some anyChar
+
+-- | Parses and returns the specified character in a case insensitive fashion
+-- succeeds only if the input is exactly the character (case insensitve)
+charCI :: Char -> Parser Char
+charCI c = satisfy (\c' -> toLower c == c' || toUpper c == c')
+
 -- | Parses and returns the specified string.
 -- Succeeds only if the input is the given string
 string :: String -> Parser String
 string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
+
+-- | Look ahead
+lookAhead :: Parser a -> Parser a
+lookAhead p = P $ \s -> do
+  (c, cs) <- doParse p s
+  return (c, s)
+
+{- maybeParse :: Parser a -> Parser a -> Parser a
+maybeParse p1 pDefault =
+  p1 <|> pDefault
+ -}
+{- (lookAhead p1 *> p1) <|> pDefault -}
+
+maybeParse :: Parser a -> Parser b -> Parser a -> Parser (Maybe b)
+maybeParse p1 pRet pDefault =
+  (p1 *> (Just <$> pRet)) <|> pDefault *> pure Nothing
+
+-- | End of Word
+endOfWord :: Parser ()
+endOfWord = lookAhead (space *> pure () <|> eof)
+
+-- | Parses and returns the specified full string.
+-- Succeeds only if the input is the given string and nothing more
+fullString :: String -> Parser String
+fullString str = string str <* endOfWord
+
+-- | Parses and retursn the specified string and follow by nothing more than a space.
 
 -- | succeed only if the input is a (positive or negative) integer
 int :: Parser Int
@@ -166,6 +226,13 @@ p `chainl1` pop = foldl comb <$> p <*> rest
 chainl :: Parser b -> Parser (b -> b -> b) -> b -> Parser b
 chainl p pop x = chainl1 p pop <|> pure x
 
+{-
+chainl1S :: Parser a -> Parser b -> Parser (a -> a -> b -> a) -> Parser a
+chainl1S p resp pop = foldl comb <$> p <*> rest
+  where
+    comb x (op, y) = x `op` y
+    rest = many ((,) <$> pop <*> p) -}
+
 -- | Combine all parsers in the list (sequentially)
 choice :: [Parser a] -> Parser a
 choice = asum -- equivalent to: foldr (<|>) empty
@@ -184,5 +251,9 @@ sepBy p sep = sepBy1 p sep <|> pure []
 --   Returns a list of values returned by @p@.
 sepBy1 :: Parser a -> Parser sep -> Parser [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
+
+sepByCount :: Int -> Parser a -> Parser sep -> Parser [a]
+sepByCount n p sep | n <= 0 = pure []
+sepByCount n p sep = (:) <$> p <*> (sep *> sepByCount (n - 1) p sep)
 
 ---------------------------------------------

@@ -1,0 +1,16 @@
+student_id,subject,age,first_name,gender,grade,last_name
+1,Math,20,John,Male,85,Doe
+1,English,20,John,Male,78,Doe
+1,History,20,John,Male,92,Doe
+2,Math,21,Jane,Female,92,Smith
+2,English,21,Jane,Female,88,Smith
+2,History,21,Jane,Female,76,Smith
+3,Math,22,Michael,Male,78,Johnson
+3,English,22,Michael,Male,95,Johnson
+3,History,22,Michael,Male,84,Johnson
+4,Math,20,Emily,Female,90,Williams
+4,English,20,Emily,Female,85,Williams
+4,History,20,Emily,Female,88,Williams
+5,Math,23,Chris,Male,86,Anderson
+5,English,23,Chris,Male,92,Anderson
+5,History,23,Chris,Male,80,Anderson
