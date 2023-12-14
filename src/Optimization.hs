@@ -190,7 +190,12 @@ s1 `checkSampleEval` s2 = interp (evalSelectCommand s1) sampleStore == interp (e
 sampleQuery :: SelectCommand
 sampleQuery =
   SelectCommand
-    { exprsSelect = (All, [AllVar]),
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "last_name"
+          ]
+        ),
       fromSelect = TableRef "Students",
       whSelect = Nothing,
       groupbySelect = [],

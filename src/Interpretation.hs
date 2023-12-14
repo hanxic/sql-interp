@@ -155,6 +155,10 @@ evalFrom (Join fe1 js fe2 jns) = do
   (newName, newTable) <- evalJoin tnTable1 js tnTable2 jns
   setScope newName newTable
   return (newName, newTable)
+evalFrom (SubQuery q) = do
+  table <- evalSelectCommand q
+  newName <- getFreeName
+  return (newName, table)
 
 interp :: SQLI a -> Store -> Either String a
 interp = S.evalState . runExceptT

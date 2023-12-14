@@ -170,7 +170,7 @@ instance PP FromExpression where
   pp :: FromExpression -> Doc
   pp (TableRef texp) = pp texp
   pp (TableAlias texp var) = pp texp <+> PP.text "AS" <+> pp var
-  {- pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc -}
+  pp (SubQuery sc) = PP.parens $ PP.nest 2 $ ppSelectCommandAux sc
   pp (Join fexp1 js fexp2 jns) =
     let ppExp1 =
           if isBaseFromExpression fexp1
