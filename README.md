@@ -1,24 +1,17 @@
 # SQL Interpreter
 
 ## Overview
-We created an interpreter for the Structured Query Language (SQL) using functional goodness of the Haskell. This project aims to achieve the following goals:
+We created an interpreter for the Structured Query Language (SQL) using functional goodness of the Haskell. Our project achieves a wide coverage of the available SQL commands which encompass the vast majority of common use cases. We hope this project will:
 
 * Expand accessibility to the SQL language to facilitate the query process for all users, especially beginner users: Compared to R (tidyverse) and Python (pandas), SQL has a more intuitive syntax. This project plans to leverage the intuitiveness of SQL syntax in implementing an easy-to-understand language for database queries.
-* Implement a wide coverage of the available SQL commands that encompass at least 80% of common use cases. Our project understands Select (the main workhorse command), Create, Delete, Drop, and Insert.
 * Provide a query optimization library with property-based testing checks: The project will also provide a simple library that, given the abstract syntax tree of our language, can perform certain query optimization such as filtering and avoiding selecting unnecessary columns / rows to improve simple optimization. The optimization library is expected to be tested using QuickCheck.
 * Allow local compilation and execution of queries: the project aims to complete the compilation and execution process locally. That is, instead of using online notebook or uploading scripts to database, this project aims to parse CSV files, parse and compile SQL-like scripts, perform query optimization, and return the result of queries entirely offline. While this may result in the limitation of the size of the table, this compiler will ensure the user's to be free from any database bugs or internet connection problem.
-
-## Example Usage
-
-```bash
-ABC
-```
 
 ## Module Structure
 We divide the project into the following three categories of functionality:
 
 ### Parser/Printer
-*Objective*: Decompose the tables (.csv files) and queries (.txt)
+*Objective*: Decompose the tables (.csv files) and queries (.txt files) into internal data structures. There is a significant amount of error handling that ensures compliance with the SQL syntax as defined here: 
 
 *Files*:
 * Parser.hs
@@ -28,13 +21,13 @@ We divide the project into the following three categories of functionality:
 * TablePrinter.hs
 
 ### Optimization
-*Objective*: Run multiple optimization passes on the query's Abstract Syntax Tree before table inspection. 
+*Objective*: Run multiple optimization passes on the query's Abstract Syntax Tree before table inspection. The first optimization pass checks for redundant Select subqueries nested within the FROM expression. The second optmization pass checks 
 
 *Files*:
 * Optimization.hs
 
 ### Interpretation
-*Objective*: Execute commands, filters, joins, expressions, etc. on the tables within scope
+*Objective*: Execute commands on the tables within scope. We interpret a wide range of SQL commands which include nested expressions utilizing eleven operations and four data types.
 
 *Files*:
 * Interpretation.hs
@@ -42,12 +35,18 @@ We divide the project into the following three categories of functionality:
 * TableSyntax.hs
 
 ### Testing
-*Objective*: Helper functions and data structures used throughout the project for both property-based testing and unit testing. We implemented two versions of a generator 
+*Objective*: Helper functions and data structures used throughout the project for both property-based testing and unit testing. We implemented two versions of a generator for the Select command to guarantee a valid result.
 
 *Files*:
 * GenSQL.hs
 * GenVSQL.hs
 * Utils.hs
+
+## Example Usage
+
+```bash
+ABC
+```
 
 ## Next Steps
 
