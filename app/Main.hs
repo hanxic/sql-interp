@@ -1,6 +1,7 @@
 module Main where
 
-import Parser
+import CommandLine
 
 main :: IO ()
-main = putStrLn ""
+main =
+  commandline

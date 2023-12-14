@@ -34,7 +34,7 @@ ppDVal (IntVal i) = SPP.pp i
 ppDVal (BoolVal b) = SPP.pp b
 ppDVal NullVal = PP.text "NULL"
 ppDVal (StringVal s) =
-  let ppRegularString = PP.doubleQuotes $ PP.text s
+  let ppRegularString = PP.quotes $ PP.text s
    in if not (null s) && not (hasWhiteSpace s) && not (hasComma s) && notElem s reservedKeyWords then PP.text s else ppRegularString
 
 instance SPP.PP Row where
@@ -72,7 +72,7 @@ ppIndexName iName = PP.hcat $ PP.punctuate PP.comma (map (SPP.pp . fst) iName)
 ppLine :: Doc -> Doc
 ppLine d = d <> PP.text "\n"
 
-ppRow :: IndexName -> Row -> Doc
+ppRow :: AnnotatedHeader -> Row -> Doc
 ppRow iName row = PP.hcat $ PP.punctuate PP.comma (map (\k -> ppDVal $ Map.findWithDefault (StringVal "") (fst k) row) iName)
 
 {-

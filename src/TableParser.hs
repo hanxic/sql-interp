@@ -91,7 +91,7 @@ nullValTP =
 
 stringValTP :: Parser DValue
 stringValTP =
-  ( StringVal <$> (SP.stringInP '\"' many <* spacesP)
+  ( StringVal <$> (SP.stringInP '\'' many <* spacesP)
       <|> ( StringVal
               <$> some (P.satisfy (\x -> x /= ',' && not (Char.isSpace x)))
           )

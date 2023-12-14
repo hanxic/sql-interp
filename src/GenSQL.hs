@@ -1,5 +1,9 @@
 module GenSQL where
 
+{- GenSQL Module contains the QuickCheck generators for testing SQLParser,
+SQLPrinter, TablePrinter, and TableParser. This file requires the knowledge of
+SQLSyntax and TableSyntax-}
+
 import Control.Monad (liftM2, liftM3, mapM_, replicateM)
 import Data.Char qualified as Char
 import Data.List.NonEmpty qualified as NE
@@ -12,27 +16,10 @@ import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 import Utils (inferAggFunctionType, inferFunctionType)
 
--- | Generate a string literal, being careful about the characters that it may contain
-
-{- genStringLit :: Gen String
-genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
-  where
-    -- escape special characters appearing in the string,
-    escape :: String -> String
-    escape = foldr Char.showLitChar ""
-    -- generate strings containing printable characters or spaces, but not including '\"'
-    stringLitChars :: [Char]
-    stringLitChars = filter (\c -> notElem c SQLSyntax.reservedChar && (Char.isSpace c || Char.isPrint c)) ['\NUL' .. '~'] -}
-
-genTest :: Gen String
-genTest = return "'"
-
-escape' :: [Char] -> [Char]
-escape' = filter (`notElem` reservedChar)
-
-test1000 :: Gen [Char]
-test1000 = escape' <$> genTest
-
+-- | A function that substitute QuickCheck's default instance for generating
+-- string The string literal generator ensures no "incorrect" strings (i.e., the
+-- string is not one of the reserved characters or contains any unprintable
+-- characters)
 genStringLit :: Gen String
 genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
   where
@@ -41,10 +28,11 @@ genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
     stringLitChars :: [Char]
     stringLitChars = filter (\c -> Char.isSpace c || Char.isPrint c) ['\NUL' .. '~']
 
-{- Arbitrary instances for nontrivial types -}
+-- | Arbitrary instance for generating DValue
 instance Arbitrary DValue where
   arbitrary :: Gen DValue
   arbitrary =
+    -- Frequency can be changed for stress-testing
     QC.frequency
       [ (1, IntVal <$> arbitrary),
         (1, BoolVal <$> arbitrary),
@@ -52,44 +40,34 @@ instance Arbitrary DValue where
         (1, pure NullVal)
       ]
 
+-- | A parameter on the maximum size of any table count
 maxSize :: Int
 maxSize = 5
 
+-- | Generating random set of variable names, from 1 to maximum size
 genNamePool :: Gen [Name]
 genNamePool = do
   i <- QC.chooseInt (1, maxSize)
   return ["Var" ++ show j | j <- [0, i]]
 
+-- | Generating random set of table names, from 1 to maximum size
 genTablePool :: Gen [TableName]
 genTablePool = do
   i <- QC.chooseInt (1, maxSize)
   return ["Table" ++ show j | j <- [0, i]]
 
-{- genVarWOAllVar :: Gen Var
-genVarWOAllVar =
-  QC.frequency
-    [ (1, VarName <$> (QC.elements =<< genNamePool)),
-      (1, Dot <$> (QC.elements =<< genTablePool) <*> (QC.elements =<< genNamePool))
-    ] -}
-
+-- | A helper function for generating random variable with the given integer
 genVar :: Int -> Gen Var
 genVar n = return $ VarName ("var" ++ show n)
 
--- genVar n =
---   QC.frequency
---     [ (1, return $ VarName ("var" ++ show n)),
---       (n', return $ Dot ("table" ++ show n) ("var" ++ show n))
---     ]
---   where
---     n' = n `div` 2
-
+-- | Arbitrary instance for generating variable
 instance Arbitrary Var where
   arbitrary :: Gen Var
   arbitrary = do
     n <- QC.sized (\x -> QC.chooseInt (1, x))
-    {- QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)] -}
     QC.sized genVar
 
+-- | Generate positive integer
 genPos :: Gen Int
 genPos = abs <$> arbitrary `QC.suchThat` (> 0)
 
@@ -106,12 +84,15 @@ genValTC BoolType = do
   QC.frequency
     [(n, BoolVal <$> arbitrary), (1, pure NullVal)]
 
+-- | Generating integer type
 genIntType :: Gen DType
 genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
 
+-- | Generating string type
 genStringType :: Gen DType
 genStringType = StringType <$> QC.chooseInt (1, 255) --- Temporary value
 
+-- | Arbitrary instance for generating dtype
 instance Arbitrary DType where
   arbitrary :: Gen DType
   arbitrary =
