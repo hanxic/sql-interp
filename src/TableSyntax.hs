@@ -7,7 +7,10 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
 import SQLSyntax
 
--- The context of available named tables which queries can reference
+{-
+The scope contains the context of available named tables which queries can reference
+The alias maps table names the new names altered by the user
+-}
 data Store = Store
   { scope :: Scope,
     alias :: Map TableName TableName
@@ -18,7 +21,13 @@ type Alias = Map TableName TableName
 
 type Scope = Map TableName Table
 
--- A table consists of an TableData (ordered List of Rows)
+{-
+A table consists of:
+  - An ordered List of Rows (TableData), where a row is a Map from column names to values
+  - The implicit order of the rows is based on a nonempty list of columns names (PrimaryKey)
+  - The schema of the table in the form of column Name, DType tuples
+-}
+
 data Table = Table
   { primaryKeys :: PrimaryKeys,
     indexName :: IndexName,
@@ -39,8 +48,14 @@ data IndexAttribute
 
 type Row = Map Var DValue
 
+{-
+The output of executing a query yields either an error message or an updated store
+-}
 type ErrorMsg = String
 
+{-
+A valid group as combined using GROUP BY will be var names mapped to a nonempty list of values
+-}
 data GroupBy a where
   SingleGroupBy :: DValue -> GroupBy a
   MultiGroupBy :: DValue -> GroupBy a -> GroupBy a
@@ -49,7 +64,9 @@ type GroupByMap = Map Var (GroupBy DValue)
 
 type GroupByVars = NE.NonEmpty Name
 
--- This is a temporary data structure and not with actual use in parser / printing
-type Header = [Var] -- True if it is a primary key, and false if not
+{-
+Header types utilized in Printer and Parser
+-}
+type Header = [Var]
 
 type AnnotatedHeader = IndexName
