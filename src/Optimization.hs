@@ -161,6 +161,7 @@ varMatchName :: Name -> Var -> Bool
 varMatchName n (Dot t v) = n == t
 varMatchName _ _ = False
 
+-- TODO
 optimizeMultiJoin :: SelectCommand -> SelectCommand
 optimizeMultiJoin sc =
   let joinRefsList = joinRefs sc
@@ -268,4 +269,3 @@ test_optimizeFromId =
         interp (evalSelectCommand sampleNoOpt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleNoOpt) sampleStore,
         sampleNoOpt ~?= optimizeFromId sampleQueryUnopt
       ]
-

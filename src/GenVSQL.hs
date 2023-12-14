@@ -186,12 +186,12 @@ genSelectBasic g = do
 
   fromExpr <- genFromExpr (Map.keys columns)
   countStyle <- arbitrary :: Gen CountStyle
-  colExpr <- genColumnExpr (numMaxExpr g) idxNames
+  colExpr <- QC.vectorOf (numMaxVar g) $ genColumnExpr (numMaxExpr g) idxNames
 
   return
     ( scope,
       SelectCommand
-        { exprsSelect = (countStyle, []),
+        { exprsSelect = (countStyle, colExpr),
           fromSelect = fromExpr,
           whSelect = Nothing,
           groupbySelect = [],
@@ -201,8 +201,31 @@ genSelectBasic g = do
         }
     )
 
-genAggExpr :: [Var] -> Gen ColumnExpression
-genAggExpr = undefined
+genAggColumnExpr :: Int -> [(Var, DType)] -> Gen ColumnExpression
+genAggColumnExpr i vs = do
+  resultDType <- QC.elements (List.map snd vs)
+  let resultVars = List.map fst $ List.filter (\x -> resultDType == snd x) vs
+  QC.frequency
+    [ (8, ColumnName <$> genAggExpr i resultDType resultVars),
+      (2, flip ColumnAlias (show i ++ "_alias") <$> genAggExpr i resultDType resultVars),
+      (1, return AllVar)
+    ]
+
+genAggExpr :: Int -> DType -> [Var] -> Gen Expression
+genAggExpr i (StringType _) vs = do
+  v1 <- Var <$> QC.elements vs
+  countStyle <- arbitrary :: Gen CountStyle
+  return $ AggFun Count countStyle v1
+genAggExpr i _ vs = do
+  v1 <- Var <$> QC.elements vs
+  countStyle <- arbitrary :: Gen CountStyle
+  QC.elements
+    [ AggFun Avg countStyle v1,
+      AggFun Count countStyle v1,
+      AggFun Max countStyle v1,
+      AggFun Min countStyle v1,
+      AggFun Sum countStyle v1
+    ]
 
 genSelectGroupBy :: GenState -> Gen (Scope, SelectCommand)
 genSelectGroupBy g = do
@@ -211,17 +234,18 @@ genSelectGroupBy g = do
   columns <- genColumns varList tableList
 
   tables <- sequence $ Map.elems $ Map.mapWithKey (genTable (numMaxRow g)) columns
+  let idxNames = List.concatMap indexName tables
   let scope = Map.fromList (tableList `zip` tables)
 
   fromExpr <- genFromExpr (Map.keys columns)
-  aggExpr <- genAggExpr varList
+  aggExpr <- QC.vectorOf (numMaxVar g) $ genAggColumnExpr (numMaxExpr g) idxNames
   countStyle <- arbitrary :: Gen CountStyle
   groupByVars <- QC.sublistOf varList
 
   return
     ( scope,
       SelectCommand
-        { exprsSelect = (countStyle, [aggExpr]),
+        { exprsSelect = (countStyle, aggExpr),
           fromSelect = fromExpr,
           whSelect = Nothing,
           groupbySelect = groupByVars,
@@ -232,14 +256,74 @@ genSelectGroupBy g = do
     )
 
 genSelectJoin :: GenState -> Gen (Scope, SelectCommand)
-genSelectJoin = undefined
+genSelectJoin g = do
+  varList <- genVarList <$> QC.chooseInt (1, numMaxVar g)
+  tableList <- genTableList <$> QC.chooseInt (1, numMaxTable g)
+  columns <- genColumns varList tableList
+
+  tables <- sequence $ Map.elems $ Map.mapWithKey (genTable (numMaxRow g)) columns
+  let idxNames = List.concatMap indexName tables
+  let scope = Map.fromList (tableList `zip` tables)
+
+  fromExpr <- genFromExpr (Map.keys columns)
+  countStyle <- arbitrary :: Gen CountStyle
+  colExpr <- QC.vectorOf (numMaxVar g) $ genColumnExpr (numMaxExpr g) idxNames
+
+  return
+    ( scope,
+      SelectCommand
+        { exprsSelect = (countStyle, colExpr),
+          fromSelect = fromExpr,
+          whSelect = Nothing,
+          groupbySelect = [],
+          orderbySelect = [],
+          limitSelect = Nothing,
+          offsetSelect = Nothing
+        }
+    )
+
+genSelectAdvanced :: GenState -> Gen (Scope, SelectCommand)
+genSelectAdvanced g = do
+  varList <- genVarList <$> QC.chooseInt (1, numMaxVar g)
+  tableList <- genTableList <$> QC.chooseInt (1, numMaxTable g)
+  columns <- genColumns varList tableList
+
+  tables <- sequence $ Map.elems $ Map.mapWithKey (genTable (numMaxRow g)) columns
+  let idxNames = List.concatMap indexName tables
+  let scope = Map.fromList (tableList `zip` tables)
+
+  fromExpr <- genFromExpr (Map.keys columns)
+  countStyle <- arbitrary :: Gen CountStyle
+  colExpr <- QC.vectorOf (numMaxVar g) $ genColumnExpr (numMaxExpr g) idxNames
+
+  limit <- QC.chooseInt (1, numMaxRow g)
+  offset <- QC.chooseInt (1, numMaxRow g)
+
+  return
+    ( scope,
+      SelectCommand
+        { exprsSelect = (countStyle, colExpr),
+          fromSelect = fromExpr,
+          whSelect = Nothing,
+          groupbySelect = [],
+          orderbySelect = [],
+          limitSelect = Just limit,
+          offsetSelect = Just offset
+        }
+    )
+
+genOrderBy :: [Var] -> [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
+genOrderBy vs = do
+  vars <- QC.sublistOf vs
+  undefined
 
 genSelect :: Gen (Scope, SelectCommand)
 genSelect =
   QC.oneof
     [ genSelectBasic initGenState,
       genSelectGroupBy initGenState,
-      genSelectJoin initGenState
+      genSelectJoin initGenState,
+      genSelectAdvanced initGenState
     ]
 
 -- data SelectCommand = SelectCommand
