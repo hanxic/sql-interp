@@ -6,6 +6,7 @@ import GenSQL
 import Parser qualified as P
 import SQLSyntax
 import TableParser
+import TablePrinter
 import TablePrinter qualified as TP
 import TableSyntax
 import Test.HUnit
@@ -41,6 +42,38 @@ prop_roundtrip_table = QC.forAll genPKIN $ \(pk, iName) ->
    in QC.forAll (genTableData ah) $ \td ->
         let table = Table pk iName td
          in P.parse (tableP pk iName) (TP.pretty table) == Right table
+
+test_ppRow :: Test
+test_ppRow =
+  TestList
+    [ pretty (Map.fromList [(VarName "a", StringVal "c"), (VarName "b", IntVal 2)]) ~?= "c,2",
+      pretty (Map.fromList [(VarName "a", BoolVal True), (VarName "b", IntVal 2), (VarName "c", StringVal "c")]) ~?= "TRUE,2,c",
+      pretty (Map.fromList [(VarName "a", BoolVal True), (VarName "b", IntVal 2), (VarName "c", StringVal "c d")]) ~?= "TRUE,2,'c d'",
+      pretty (Map.fromList [(VarName "a", BoolVal True), (VarName "b", IntVal 2), (VarName "c", StringVal "NULL")]) ~?= "TRUE,2,'NULL'",
+      pretty (Map.fromList [(VarName "a", StringVal "Hello"), (VarName "b", StringVal "THERE")]) ~?= "Hello,THERE"
+    ]
+
+test_ppPrimaryKeys :: Test
+test_ppPrimaryKeys =
+  TestList
+    [ render (ppPrimaryKeys (NE.fromList [(VarName "a", StringType 255), (VarName "b", IntType 32), (VarName "c", BoolType)])) ~?= "a,b,c"
+    ]
+
+test_ppTable :: Test
+test_ppTable =
+  TestList
+    [ pretty
+        ( Table
+            (NE.fromList [(VarName "a", StringType 255), (VarName "b", BoolType)])
+            [(VarName "c", IntType 32), (VarName "d", BoolType)]
+            [ Map.fromList
+                [(VarName "a", StringVal "hello"), (VarName "b", BoolVal True), (VarName "c", IntVal 255), (VarName "d", BoolVal False), (VarName "e", StringVal "Not a part")],
+              Map.fromList
+                [(VarName "a", StringVal "hello"), (VarName "b", BoolVal True), (VarName "c", IntVal 255), (VarName "d", BoolVal False), (VarName "e", StringVal "Not a part")]
+            ]
+        )
+        ~?= "a,b,c,d\nhello,TRUE,255,FALSE\nhello,TRUE,255,FALSE"
+    ]
 
 test_varTP :: Test
 test_varTP =
@@ -97,7 +130,10 @@ test_all :: IO Counts
 test_all =
   runTestTT $
     TestList
-      [ test_headerP,
+      [ test_ppRow,
+        test_ppPrimaryKeys,
+        test_ppTable,
+        test_headerP,
         test_nullValTP,
         test_stringValTP,
         test_boolValTP,

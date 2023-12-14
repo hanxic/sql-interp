@@ -5,6 +5,7 @@ import TablePrinter qualified as TP
 import Test.HUnit
 import Test.QuickCheck
 import TestInterpretation
+import TestOptimization
 import TestSQL
 import TestTable
 
@@ -20,6 +21,10 @@ main = do
   TestTable.qc
   putStrLn "SQL-Interp Test suites "
   testProgram
+  putStrLn "Unit Testing for Optimization"
+  TestOptimization.test_all
+  putStrLn "Property-Based Testing for Optimization"
+  TestOptimization.qc
 
 testProgram :: IO ()
 testProgram =
