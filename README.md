@@ -2,7 +2,7 @@
 
 ## Overview
 
-Hello! We created an interpreter for the Structured Query Language (SQL) using functional goodness of the Haskell. Our project achieves a wide coverage of the available SQL commands which encompass the vast majority of common use cases. We hope this project will:
+Hello there! We created an interpreter for the Structured Query Language (SQL) using the functional goodness of the Haskell. Our project achieves a wide coverage of the available SQL commands which encompass the vast majority of common use cases. We hope this project will:
 
 - Expand accessibility to the SQL language to facilitate the query process for all users, especially beginner users: Compared to R (tidyverse) and Python (pandas), SQL has a more intuitive syntax. This project plans to leverage the intuitiveness of SQL syntax in implementing an easy-to-understand language for database queries.
 - Provide a query optimization library with property-based testing checks: The project will also provide a simple library that, given the abstract syntax tree of our language, can perform certain query optimization such as filtering and avoiding selecting unnecessary columns / rows to improve simple optimization. The optimization library is expected to be tested using QuickCheck.
@@ -10,7 +10,7 @@ Hello! We created an interpreter for the Structured Query Language (SQL) using f
 
 ## Module Structure
 
-We divide the project into the following three categories of functionality:
+We divide the project into the following categories of functionality:
 
 ### Parser/Printer
 
@@ -166,6 +166,9 @@ SQL-Interp>:redirect test/test-suite/output/csv1.csv
 Redirect successful to test/test-suite/output/csv1.csv
 SQL-Interp>:output _Table3
 ```
+
+## Presentation
+[Link](https://penno365-my.sharepoint.com/:p:/g/personal/wcurrie_upenn_edu/Eb6u8Ahuen1DvHP0hT6zYEIBPaddYJKWNf2TWgthMEvPnQ?e=m9YYIW) to our presentation on the project.
 
 ## Next Steps
 
