@@ -1,39 +1,253 @@
 module TestOptimization where
 
+import Control.Monad.State
+import Data.List as List
+import Data.Map as Map
+import Data.Maybe
+import GenVSQL
+import Interpretation
 import Optimization
-import Parser
+import SQLSyntax
+import TableSyntax
+import Test.HUnit
+import Test.QuickCheck as QC
 
-instance Arbitrary AST where
-  arbitrary :: Gen AST
-  arbitrary = QC.listOf (arbitrary :: Gen Query) >>= \xs -> return (fromList xs)
+-- Property-based Testing
 
-  shrink :: AST -> [AST]
-  shrink (Node l _ r) = [l, r]
-  shrink _ = []
+storeId :: Scope -> Store
+storeId sc =
+  Store
+    { scope = sc,
+      alias = Map.empty
+    }
 
-prop_valid :: TableMap -> Bool
-prop_valid = undefined
+interpEquality :: (SelectCommand -> SelectCommand) -> QC.Property
+interpEquality opt = QC.forAll genSelect $ \(scope, query) ->
+  interp (evalSelectCommand query) (storeId scope) == interp (evalSelectCommand $ opt query) (storeId scope)
 
-prop_optimizeSelectAll :: AST -> Bool
-prop_optimizeSelectAll t = optimizeSelectAll t == t
+prop_optimizeFromId :: QC.Property
+prop_optimizeFromId = interpEquality optimizeFromId
 
-prop_optimizeCascSelect :: AST -> Bool
-prop_optimizeCascSelect t = optimizeSelectAll t == t
+prop_optimizeWhereJoin :: QC.Property
+prop_optimizeWhereJoin = interpEquality optimizeWhereJoin
 
-prop_optimizeCommSelect :: AST -> Bool
-prop_optimizeCommSelect t = optimizeSelectAll t == t
+-- Unit-tests
 
-prop_optimizeCascProjection :: AST -> Bool
-prop_optimizeCascProjection t = optimizeSelectAll t == t
+checkSampleEval :: SelectCommand -> SelectCommand -> Bool
+s1 `checkSampleEval` s2 = interp (evalSelectCommand s1) sampleStore == interp (evalSelectCommand s2) sampleStore
 
-prop_combineSelectJoin :: AST -> Bool
-prop_combineSelectJoin t = optimizeSelectAll t == t
+sampleQuery :: SelectCommand
+sampleQuery =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "last_name"
+          ]
+        ),
+      fromSelect = TableRef "Students",
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
 
-prop_runtime :: AST -> Bool
-prop_runtime t = undefined
+sampleQueryUnopt :: SelectCommand
+sampleQueryUnopt =
+  SelectCommand
+    { exprsSelect = (All, [AllVar]),
+      fromSelect = SubQuery sampleQuery,
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
 
--- prop_runtime t = evalRunTime (optimize t) <= (evalRunTime t) + 0.0001
+sampleQuerySuperUnopt :: SelectCommand
+sampleQuerySuperUnopt =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "last_name"
+          ]
+        ),
+      fromSelect = SubQuery sampleQueryUnopt,
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
 
--- Notes:
---   - count the number of operations as a proxy for runtime
---   -
+sampleNoOpt :: SelectCommand
+sampleNoOpt =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "last_name"
+          ]
+        ),
+      fromSelect = TableRef "Students",
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+test_optimizeFromId :: Test
+test_optimizeFromId =
+  "optimize From Id"
+    ~: TestList
+      [ interp (evalSelectCommand sampleQueryUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleQueryUnopt) sampleStore,
+        interp (evalSelectCommand sampleQuerySuperUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleQuerySuperUnopt) sampleStore,
+        interp (evalSelectCommand sampleNoOpt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleNoOpt) sampleStore
+      ]
+
+sampleJoinUnOpt1 :: SelectCommand
+sampleJoinUnOpt1 =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "grade"
+          ]
+        ),
+      fromSelect =
+        Join
+          (TableRef "Students")
+          InnerJoin
+          (TableRef "Grades")
+          [ ( Dot "Students" (VarName "student_id"),
+              Dot "Grades" (VarName "student_id")
+            )
+          ],
+      whSelect = Just $ Op2 (Var $ VarName "grade") Ge (Val $ IntVal 90),
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+sampleJoinUnOpt2 :: SelectCommand
+sampleJoinUnOpt2 =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "grade"
+          ]
+        ),
+      fromSelect =
+        Join
+          (TableRef "Students")
+          InnerJoin
+          (TableRef "Grades")
+          [ ( Dot "Students" (VarName "student_id"),
+              Dot "Grades" (VarName "student_id")
+            )
+          ],
+      whSelect = Just $ Op2 (Var $ VarName "gender") Is (Val $ StringVal "Female"),
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+sampleJoinNoOpt1 :: SelectCommand
+sampleJoinNoOpt1 =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "grade"
+          ]
+        ),
+      fromSelect =
+        Join
+          (TableRef "Students")
+          InnerJoin
+          (TableRef "Grades")
+          [ ( Dot "Students" (VarName "student_id"),
+              Dot "Grades" (VarName "student_id")
+            )
+          ],
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+sampleJoinNoOpt2 :: SelectCommand
+sampleJoinNoOpt2 =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "grade"
+          ]
+        ),
+      fromSelect =
+        Join
+          (TableRef "Students")
+          InnerJoin
+          (TableRef "Grades")
+          [ ( Dot "Students" (VarName "student_id"),
+              Dot "Grades" (VarName "student_id")
+            )
+          ],
+      whSelect =
+        Just $
+          Op2
+            (Op2 (Var $ Dot "Grades" (VarName "grade")) Ge (Val $ IntVal 90))
+            And
+            (Op2 (Var $ Dot "Students" (VarName "gender")) Is (Val $ StringVal "Male")),
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+test_optimizeWhereJoin :: Test
+test_optimizeWhereJoin =
+  "optimize Where Join"
+    ~: TestList
+      [ interp (evalSelectCommand sampleJoinUnOpt1) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinUnOpt1) sampleStore,
+        interp (evalSelectCommand sampleJoinUnOpt2) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinUnOpt2) sampleStore,
+        interp (evalSelectCommand sampleJoinNoOpt1) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinNoOpt1) sampleStore,
+        interp (evalSelectCommand sampleJoinNoOpt2) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinNoOpt2) sampleStore
+      ]
+
+test_optimizationMain :: Test
+test_optimizationMain =
+  "optimize Main"
+    ~: TestList
+      [ interp (evalSelectCommand sampleQueryUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleQueryUnopt) sampleStore,
+        interp (evalSelectCommand sampleQuerySuperUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleQuerySuperUnopt) sampleStore,
+        interp (evalSelectCommand sampleNoOpt) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleNoOpt) sampleStore,
+        interp (evalSelectCommand sampleJoinUnOpt1) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleJoinUnOpt1) sampleStore,
+        interp (evalSelectCommand sampleJoinUnOpt2) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleJoinUnOpt2) sampleStore,
+        interp (evalSelectCommand sampleJoinNoOpt1) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleJoinNoOpt1) sampleStore,
+        interp (evalSelectCommand sampleJoinNoOpt2) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleJoinNoOpt2) sampleStore
+      ]
+
+test_all :: IO Counts
+test_all =
+  runTestTT $
+    TestList
+      [ test_optimizeFromId,
+        test_optimizeWhereJoin,
+        test_optimizationMain
+      ]
+
+qc :: IO ()
+qc = do
+  putStrLn "optimize_fromid"
+  QC.quickCheck prop_optimizeFromId
+  putStrLn "optimize_wherejoin"
+  QC.quickCheck prop_optimizeFromId
