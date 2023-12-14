@@ -67,6 +67,9 @@ ghci>
 ghci> 
 ```
 
+## Presentation
+[Link](https://penno365-my.sharepoint.com/:p:/g/personal/wcurrie_upenn_edu/Eb6u8Ahuen1DvHP0hT6zYEIBPaddYJKWNf2TWgthMEvPnQ?e=m9YYIW) to our presentation on the project.
+
 ## Next Steps
 
 We thoroughly enjoyed working on this project and are proud of the progress we made in implementing a SQL interpreter this semester. If we had more time, we would spend more time on the following:
