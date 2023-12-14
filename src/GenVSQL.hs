@@ -8,6 +8,7 @@ import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Set as Set
 import GenSQL
 import SQLSyntax
 import TableSyntax
@@ -49,12 +50,17 @@ genVarList n = List.map (\x -> VarName ("var" ++ show x)) [1 .. n]
 
 --      Dot ("table" ++ show n) ("var" ++ show n)
 
+sublist1Of :: (Ord a) => [a] -> Gen [a]
+sublist1Of xs = do
+  i <- QC.chooseInt (1, length xs)
+  Set.toList . Set.fromList <$> QC.vectorOf i (QC.elements xs)
+
 genTableList :: Int -> [TableName]
 genTableList n = List.map (\x -> "table" ++ show x) [1 .. n]
 
 genColumns :: [Var] -> [TableName] -> Gen (Map TableName [Var])
 genColumns vs ts = do
-  varSubsets <- QC.vectorOf (length ts) (QC.sublistOf vs)
+  varSubsets <- QC.vectorOf (length ts) (sublist1Of vs)
   return $ Map.fromList (ts `zip` varSubsets)
 
 genPrimaryKeys :: [(Var, DType)] -> Gen PrimaryKeys
@@ -313,9 +319,13 @@ genSelectAdvanced g = do
     )
 
 genOrderBy :: [Var] -> [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)]
-genOrderBy vs = do
-  vars <- QC.sublistOf vs
-  undefined
+genOrderBy vs = undefined
+
+-- genOrderBy vs = do
+--   v <- QC.elements vs
+--   ads <- arbitrary :: Gen OrderTypeAD
+--   fls <- QC.maybeGen (arbitrary :: Gen OrderTypeFL)
+--   return [(v, Just ads, fls)]
 
 genSelect :: Gen (Scope, SelectCommand)
 genSelect =
