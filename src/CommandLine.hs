@@ -13,11 +13,13 @@ import TablePrinter
 import TableSyntax
 import Text.Read (readMaybe)
 
+-- | A data structure that will refer to the output location
 data OutputLoc
   = File FilePath
   | Terminal
   deriving (Eq, Show)
 
+-- | The state of the main IO
 data CLMemory = CLMemory
   { stack :: Stack,
     outputLoc :: OutputLoc,
