@@ -17,23 +17,6 @@ import TablePrinter qualified as TP
 import TableSyntax
 import Test.HUnit
 
-{- Plan of attack
-1. Create a folder with all the test cases
-2. For each test cases, fetch the SQL scripts
-  2.1 For each test cases, also fetch the resulting table
-  2.2 Return the two being the same
--}
-
-{- readStringFromFolder :: FilePath -> FilePath -> IO (Maybe String)
-readStringFromFolder folder fileName = do
-  let filePath = folder </> fileName
-  fileExists <- doesFileExist filePath
-  if fileExists
-    then do
-      content <- readFile filePath
-      return (Just content)
-    else return Nothing -}
-
 type IOS a = StateT IOStore IO a
 
 testPath = "./test/test-suite"
@@ -221,35 +204,11 @@ runTestCase answerFolder answerScript answerName testScript = do
               )
           )
 
-{- loadTestCases :: IOS ()
-loadTestCases = undefined -}
-
 runTestCases :: IOS ()
 runTestCases = do
   loadSetup
   mapM_ (\(x1, x2, x3, x4) -> hideContext (runTestCase x1 x2 x3 x4)) testcases
 
-{- setupEnv (testPath </> "test1") "answer" "answer" -}
-
-{- test103 = SPAR.parseSQLFile (testPath </> "test3" </> "test3" -<.> sqlformat)
-
-test104 = SPAR.parseSQLFile (testPath </> "test4" </> "answer" -<.> sqlformat)
-
--- >>> test104
--- Right [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("\"COUNT(order_id)\"",IntType 16,True)]})]
-
-test109 = [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("\"COUNT(order_id)\"", IntType 16, True)]})]
-
-test108 = exec (eval test10) emptyStore
-
--- >>> test108
--- Store {scope = fromList [("answer",Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = []})], alias = fromList []}
-
-test107 = TPAR.parseCSVFile (NE.fromList [(VarName "order_id", IntType 16)]) [(VarName "amount + 5", IntType 16), (VarName "customer_id", IntType 16)] (testPath </> "test5" </> "answer" -<.> sqlformat)
-
--- >>> test107
--- Left "No parses"
- -}
 -- loadTest
 testcases :: [(FilePath, String, String, String)]
 testcases =
