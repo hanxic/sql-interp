@@ -394,5 +394,11 @@ queryP = SelectQuery <$> scP <|> DeleteQuery <$> dcP <|> CreateQuery <$> ccP
 sqlP :: Parser Queries
 sqlP = many (queryP <* wsP (P.char ';'))
 
+parseQuery :: String -> Either P.ParseError Query
+parseQuery = P.parse queryP
+
+parseSQL :: String -> Either P.ParseError Queries
+parseSQL = P.parse sqlP
+
 parseSQLFile :: String -> IO (Either P.ParseError Queries)
 parseSQLFile = P.parseFromFile (sqlP <* P.eof)

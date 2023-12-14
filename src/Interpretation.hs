@@ -166,10 +166,13 @@ interp = S.evalState . runExceptT
 exec :: SQLI a -> Store -> Store
 exec = S.execState . runExceptT
 
+run :: SQLI a -> Store -> (Either String a, Store)
+run = S.runState . runExceptT
+
 test_evalFrom :: Test
 test_evalFrom =
-  "evaluate From"
-    ~: TestList
+  "evaluate From" ~:
+    TestList
       [ interp (evalFrom (TableRef "Students")) sampleStore ~?= Right ("Students", tableSampleStudents),
         interp (evalFrom (TableRef "bla")) sampleStore ~?= Left "No Table for table reference: bla",
         interp (evalFrom (TableAlias "Students" "Student1")) sampleStore ~?= Right ("Student1", tableSampleStudents),
@@ -226,8 +229,8 @@ testJoinMidRes1 =
 
 test_joinMid :: Test
 test_joinMid =
-  "evaluate Op2"
-    ~: TestList
+  "evaluate Op2" ~:
+    TestList
       [ interp (joinMid (tableData tableSampleGrades) (tableData tableSampleStudents) <$> getJoinSpec "Students" "Grades" [(Dot "Students" $ VarName "student_id", Dot "Grades" $ VarName "student_id")]) sampleStore ~?= Right testJoinMidRes1
       ]
 
@@ -546,8 +549,8 @@ evalOp2 bop dval1 dval2 =
 
 test_evaluateOp2 :: Test
 test_evaluateOp2 =
-  "evaluate Op2"
-    ~: TestList
+  "evaluate Op2" ~:
+    TestList
       [ interp (evalE (Op2 (Val NullVal) Eq (Val NullVal)) Map.empty) sampleStore ~?= Right (BoolVal True),
         interp (evalE (Op2 (Val $ IntVal 3) Eq (Val (IntVal 3))) Map.empty) sampleStore ~?= Right (BoolVal True),
         interp (evalE (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) Map.empty) sampleStore ~?= Right (BoolVal False),
