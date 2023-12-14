@@ -10,6 +10,7 @@ import TableSyntax
 import Test.HUnit
 import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
+import Utils (inferAggFunctionType, inferFunctionType)
 
 -- | Generate a string literal, being careful about the characters that it may contain
 
@@ -105,14 +106,6 @@ genValTC BoolType = do
   QC.frequency
     [(n, BoolVal <$> arbitrary), (1, pure NullVal)]
 
-inferAggFunctionType :: AggFunction -> Gen DType
-inferAggFunctionType f =
-  genIntType -- TODO: Add more types when more functions are added
-
-inferFunctionType :: Function -> Gen DType
-inferFunctionType f =
-  genStringType -- TODO: Add more types when more functions are added
-
 genIntType :: Gen DType
 genIntType = IntType <$> QC.chooseInt (1, 32) -- No Bool type
 
@@ -146,8 +139,7 @@ genExp n =
     genFun =
       arbitrary
         >>= ( \f ->
-                Fun f
-                  <$> (inferFunctionType f >>= genExpTC)
+                Fun f <$> genExpTC (inferFunctionType f)
             )
     genAggFun :: Gen Expression
     genAggFun =
@@ -155,7 +147,7 @@ genExp n =
         >>= ( \f ->
                 AggFun f
                   <$> arbitrary
-                  <*> (inferAggFunctionType f >>= genExpTC)
+                  <*> genExpTC (inferAggFunctionType f)
             )
     genExpTC :: DType -> Gen Expression
     genExpTC t =

@@ -2,12 +2,13 @@
 
 module Interpretation where
 
+{- import Data.Bits (Bits (bitSize), FiniteBits (finiteBitSize)) -}
+
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Except (Except, ExceptT, runExceptT, throwError)
 import Control.Monad.State (State, get, put, runState)
 import Control.Monad.State qualified as S
-{- import Data.Bits (Bits (bitSize), FiniteBits (finiteBitSize)) -}
-
 import Data.Char (toLower, toUpper)
 import Data.Foldable (foldrM)
 import Data.Function ((&))
@@ -15,7 +16,7 @@ import Data.Functor ((<&>))
 import Data.List as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, maybeToList)
 import GenSQL qualified as GSQL
 import Parser qualified as PAR
 import SQLParser qualified as SPAR
@@ -41,6 +42,7 @@ import Text.Printf (FieldFormat (FieldFormat))
 import Text.Read (readMaybe)
 import Text.Regex.Base qualified as REGEX
 import Text.Regex.Posix qualified as POSIX ((=~))
+import Utils
 
 {- import Test.QuickCheck.Monadic qualified as QCM -}
 
@@ -103,12 +105,12 @@ getTable tn = do
     Just table -> return $ Just (tn, table)
     _ -> return Nothing
 
-setScope :: TableName -> Table -> SQLI ()
+setScope :: TableName -> Table -> SQLI Store
 setScope tn t = do
   store <- S.get
   let newScope = Map.insert tn t $ scope store
    in let newStore = Store newScope (alias store)
-       in S.put newStore
+       in S.put newStore >> return newStore
 
 delScope :: TableName -> SQLI ()
 delScope tn = do
@@ -116,6 +118,9 @@ delScope tn = do
   let newScope = Map.delete tn $ scope store
    in let newStore = Store newScope (alias store)
        in S.put newStore
+
+getStore :: SQLI Store
+getStore = S.get
 
 hideScope :: SQLI a -> SQLI a
 hideScope sqli = do
@@ -153,6 +158,9 @@ evalFrom (Join fe1 js fe2 jns) = do
 
 interp :: SQLI a -> Store -> Either String a
 interp = S.evalState . runExceptT
+
+exec :: SQLI a -> Store -> Store
+exec = S.execState . runExceptT
 
 test_evalFrom :: Test
 test_evalFrom =
@@ -269,15 +277,19 @@ getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
             then return $ \row1 row2 -> Map.lookup jo2 row1 == Map.lookup jo1 row2
             else throwAliases var1 var2
 
-evalQuery :: Query -> SQLI ()
-evalQuery (SelectQuery q) = undefined {- evalSelectCommand q -}
+evalQuery :: Query -> SQLI Table
+evalQuery (SelectQuery q) = evalSelectCommand q
 evalQuery (DeleteQuery q) = evalDeleteCommand q
+evalQuery (CreateQuery q) = evalCreateCommand q
+
+eval :: Queries -> SQLI ()
+eval = mapM_ evalQuery
 
 evalSelectCommand :: SelectCommand -> SQLI Table
 evalSelectCommand q = do
   tableFrom <- evalFrom (fromSelect q)
   tableWhere <- evalWhere (whSelect q) tableFrom
-  tableGroupBy <- evalGroupBySelect (groupbySelect q) (exprsSelect q) tableWhere
+  tableGroupBy <- evalGroupBySelect1 (groupbySelect q) (exprsSelect q) tableWhere
   tableOrder <- evalOrderBy (orderbySelect q) tableGroupBy
   tableOffset <- evalOffset (offsetSelect q) tableOrder
   evalLimit (limitSelect q) tableOffset
@@ -510,17 +522,49 @@ evalSort ordering td = return $ List.sortBy ordering td
 sort on the first variable, and group by -> repeatedly sort on the second and group by
 
 -}
+
+test2013 = SPAR.parseSQLFile "./test/test-suite/setup/setup.sql"
+
+-- >>> test2013
+-- Right [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Customers", idCreate = [("customer_id",IntType 16,True),("first_name",StringType 255,False),("last_name",StringType 255,False),("age",IntType 16,False),("country",StringType 255,False)]}),CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Orders", idCreate = [("order_id",IntType 16,True),("item",StringType 255,False),("amount",IntType 16,False),("customer_id",IntType 16,False)]}),CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Shippings", idCreate = [("shipping_id",IntType 16,True),("status",StringType 255,False),("customer",IntType 16,False)]})]
+
+test2015 = [CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Customers", idCreate = [("customer_id", IntType 16, True), ("first_name", StringType 255, False), ("last_name", StringType 255, False), ("age", IntType 16, False), ("country", StringType 255, False)]}), CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Orders", idCreate = [("order_id", IntType 16, True), ("item", StringType 255, False), ("amount", IntType 16, False), ("customer_id", IntType 16, False)]}), CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Shippings", idCreate = [("shipping_id", IntType 16, True), ("status", StringType 255, False), ("customer", IntType 16, False)]})]
+
+test2014 = exec (eval test2015) emptyStore
+
+-- >>> test2014
+-- Store {scope = fromList [("Customers",Table {primaryKeys = (VarName "customer_id",IntType 16) :| [], indexName = [(VarName "first_name",StringType 255),(VarName "last_name",StringType 255),(VarName "age",IntType 16),(VarName "country",StringType 255)], tableData = []}),("Orders",Table {primaryKeys = (VarName "order_id",IntType 16) :| [], indexName = [(VarName "item",StringType 255),(VarName "amount",IntType 16),(VarName "customer_id",IntType 16)], tableData = []}),("Shippings",Table {primaryKeys = (VarName "shipping_id",IntType 16) :| [], indexName = [(VarName "status",StringType 255),(VarName "customer",IntType 16)], tableData = []})], alias = fromList []}
+
+test2017 = Store {scope = fromList [("Customers", Table {primaryKeys = (VarName "customer_id", IntType 16) NE.:| [], indexName = [(VarName "first_name", StringType 255), (VarName "last_name", StringType 255), (VarName "age", IntType 16), (VarName "country", StringType 255)], tableData = []}), ("Orders", Table {primaryKeys = (VarName "order_id", IntType 16) NE.:| [], indexName = [(VarName "item", StringType 255), (VarName "amount", IntType 16), (VarName "customer_id", IntType 16)], tableData = [fromList [(VarName "amount", IntVal 400), (VarName "customer_id", IntVal 4), (VarName "item", StringVal "Keyboard"), (VarName "order_id", IntVal 1)], fromList [(VarName "amount", IntVal 300), (VarName "customer_id", IntVal 4), (VarName "item", StringVal "Mouse"), (VarName "order_id", IntVal 2)], fromList [(VarName "amount", IntVal 12000), (VarName "customer_id", IntVal 3), (VarName "item", StringVal "Monitor"), (VarName "order_id", IntVal 3)], fromList [(VarName "amount", IntVal 400), (VarName "customer_id", IntVal 1), (VarName "item", StringVal "Keyboard"), (VarName "order_id", IntVal 4)], fromList [(VarName "amount", IntVal 250), (VarName "customer_id", IntVal 2), (VarName "item", StringVal "Mousepad"), (VarName "order_id", IntVal 5)]]}), ("Shippings", Table {primaryKeys = (VarName "shipping_id", IntType 16) NE.:| [], indexName = [(VarName "status", StringType 255), (VarName "customer", IntType 16)], tableData = []})], alias = fromList []}
+
+test401 =
+  Table
+    { primaryKeys = (VarName "amount", IntType 16) NE.:| [(VarName "customer_id", IntType 16), (VarName "item", StringType 255), (VarName "order_id", IntType 16)],
+      indexName = [],
+      tableData =
+        [ fromList [(VarName "amount", IntVal 400), (VarName "customer_id", IntVal 4), (VarName "item", StringVal "Keyboard"), (VarName "order_id", IntVal 1)],
+          fromList [(VarName "amount", IntVal 300), (VarName "customer_id", IntVal 4), (VarName "item", StringVal "Mouse"), (VarName "order_id", IntVal 2)],
+          fromList [(VarName "amount", IntVal 12000), (VarName "customer_id", IntVal 3), (VarName "item", StringVal "Monitor"), (VarName "order_id", IntVal 3)],
+          fromList [(VarName "amount", IntVal 400), (VarName "customer_id", IntVal 1), (VarName "item", StringVal "Keyboard"), (VarName "order_id", IntVal 4)],
+          fromList [(VarName "amount", IntVal 250), (VarName "customer_id", IntVal 2), (VarName "item", StringVal "Mousepad"), (VarName "order_id", IntVal 5)]
+        ]
+    }
+
+test402 = interp (evalOrderBy [(VarName "amount", Nothing, Nothing)] test401) test2017
+
+-- >>> test402
+-- Right (Table {primaryKeys = (VarName "amount",IntType 16) :| [(VarName "customer_id",IntType 16),(VarName "item",StringType 255),(VarName "order_id",IntType 16)], indexName = [], tableData = [fromList [(VarName "amount",IntVal 250),(VarName "customer_id",IntVal 2),(VarName "item",StringVal "Mousepad"),(VarName "order_id",IntVal 5)],fromList [(VarName "amount",IntVal 300),(VarName "customer_id",IntVal 4),(VarName "item",StringVal "Mouse"),(VarName "order_id",IntVal 2)],fromList [(VarName "amount",IntVal 400),(VarName "customer_id",IntVal 4),(VarName "item",StringVal "Keyboard"),(VarName "order_id",IntVal 1)],fromList [(VarName "amount",IntVal 400),(VarName "customer_id",IntVal 1),(VarName "item",StringVal "Keyboard"),(VarName "order_id",IntVal 4)],fromList [(VarName "amount",IntVal 12000),(VarName "customer_id",IntVal 3),(VarName "item",StringVal "Monitor"),(VarName "order_id",IntVal 3)]]})
+
 getOrdering :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
-getOrdering = foldrM decideOrdering (const $ const LT) -- will not happen
+getOrdering = foldrM decideOrdering (const $ const EQ) -- will not happen
 
 test_evalOrderBy :: Test
 test_evalOrderBy =
   TestList
-    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] (tableSampleStudents)) sampleStore ~?= Right (Table (primaryKeys tableSampleStudents) (indexName tableSampleStudents) (reverse $ tableData tableSampleStudents))
+    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] tableSampleStudents) sampleStore ~?= Right (Table (primaryKeys tableSampleStudents) (indexName tableSampleStudents) (reverse $ tableData tableSampleStudents))
     ]
 
-{- foldrM (\(v, mad, mfl) acc -> normalizeSort x acc) undefined undefined -}
-
+-- | A helper function that, given a single order by parameter and a ordering function, returning a new ordering function with the parameter as the first decider
 decideOrdering :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> (Row -> Row -> Ordering) -> SQLI (Row -> Row -> Ordering)
 decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
   let (dval1, dval2) =
@@ -544,6 +588,7 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
     decideOrderingAux dval1 dval2 mad accF r1 r2 =
       case mad of
         Just DESC ->
+          -- Normal ordering is ascending order
           case compare dval1 dval2 of
             EQ -> accF r1 r2
             LT -> GT
@@ -552,6 +597,7 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
           EQ -> accF r1 r2
           o -> o
 
+-- | A helper function that check whether the select expressions have aggregate function or not
 hasAggFun :: [ColumnExpression] -> Bool
 hasAggFun = List.foldr (\x acc -> acc || hasAggFunCol x) False
   where
@@ -567,15 +613,125 @@ hasAggFunExpr (Op2 expr1 _ expr2) = hasAggFunExpr expr1 || hasAggFunExpr expr2
 hasAggFunExpr (Fun _ expr) = hasAggFunExpr expr
 hasAggFunExpr _ = False
 
-evalGroupBySelect :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
-evalGroupBySelect [] (cs, ce) (tn, Table pk iName td) =
-  let rowGroups = if hasAggFun ce then [td] else List.map (: []) td
-   in evalSelectRowGroups (cs, ce) tn pk iName rowGroups
-evalGroupBySelect vars selectParams (tn, Table pk iName td) = do
+{-
+Rethink the workflow for group by
+1. For every column expression, annotated it to have a type
+2. evalGroupBySelect should be correct
+3. The question is about type, if I annotate it first and then find primary keys: Two conditions:
+  1. Either the columns cover all primary keys
+  2. Or the first group key is covered in some expression as the main dominator
+
+-}
+
+-- | A helper function that, given the first parameter of group by, the select clause, and primary keys and index, return the newer primary keys and index
+evalGroupBySelectPKIN :: Maybe Var -> [ColumnExpression] -> PrimaryKeys -> IndexName -> SQLI (PrimaryKeys, IndexName)
+evalGroupBySelectPKIN fstGroup ces pk iName =
+  case deterPK fstGroup ces pk of -- Determine if there exists a primary key, maybe not possible
+    Nothing -> throwError "No primary key is valid"
+    Just pks ->
+      let newTypeMap = extractAH ces pk iName
+       in let pkMap = Map.fromList $ NE.toList pks
+           in let newIName =
+                    -- index name is anything other than the primary key
+                    Map.foldrWithKey
+                      ( \var dtype acc ->
+                          if var `notMember` pkMap
+                            then (var, dtype) : acc
+                            else acc
+                      )
+                      []
+                      newTypeMap
+               in return (pks, newIName)
+
+annotatedMapCreate :: PrimaryKeys -> IndexName -> Map Var DType
+annotatedMapCreate pk iName = Map.fromList (NE.toList pk) `Map.union` Map.fromList iName
+
+-- | The function for grouping the table by certain columns and then select
+-- For performance, group by function will essentially leverage sorting functions and groupping
+annotatedSelect :: [ColumnExpression] -> PrimaryKeys -> IndexName -> SQLI (Map Expression (Var, DType))
+annotatedSelect ces pk iName =
+  let ahMap = annotatedMapCreate pk iName
+   in foldM (go ahMap) Map.empty ces
+  where
+    go :: Map Var DType -> Map Expression (Var, DType) -> ColumnExpression -> SQLI (Map Expression (Var, DType))
+    go ahMap aeMap AllVar =
+      let eMap = Map.mapKeys Var (Map.mapWithKey (,) ahMap)
+       in return $ eMap `Map.union` aeMap
+    go ahMap aeMap (ColumnName expr) =
+      case inferExprType expr ahMap of
+        Nothing -> throwError $ "Cannot infer the type of " ++ TP.pretty expr
+        Just dtype -> return $ Map.singleton expr (VarName $ TP.pretty expr, dtype) `Map.union` aeMap
+    {-         >>= (\x -> return $ x `Map.union` aeMap)
+              . (\x -> Map.singleton expr (VarName $ TP.pretty expr, x)) -}
+    go ahMap aeMap (ColumnAlias expr alias) =
+      case inferExprType expr ahMap of
+        Nothing -> throwError $ "Cannot infer the type of " ++ TP.pretty expr
+        Just dtype -> return $ Map.singleton expr (VarName alias, dtype) `Map.union` aeMap
+
+evalGroupBySelect1 :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
+evalGroupBySelect1 vars (cs, ces) (tn, Table pk iName td) = do
+  aeMap <- annotatedSelect ces pk iName
+  if Map.null aeMap
+    then throwError "Zero valid selection"
+    else evalGroupBySelectUlt vars aeMap pk iName tn td
+
+evalGroupBySelectUlt :: [Var] -> Map Expression (Var, DType) -> PrimaryKeys -> IndexName -> TableName -> TableData -> SQLI Table
+evalGroupBySelectUlt [] aeMap pk iName tn td =
+  let rowGroups = if any hasAggFunExpr (keys aeMap) then [td] else List.map (: []) td
+   in evalSelectRowGroups' aeMap pk iName rowGroups
+evalGroupBySelectUlt vars aeMap pk iName tn td = do
+  ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
+  td' <- evalSort ordering td
+  let rowGroups = List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td'
+   in evalSelectRowGroups' aeMap pk iName rowGroups
+
+-- | The use of this function is that it will actually filter every expressions to form a row.
+evalSelectRowGroups' :: Map Expression (Var, DType) -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelectRowGroups' aeMap pk iName rowGroups =
+  let newPK = Map.toList aeMap
+   in do
+        newTD <- foldrM (\x acc -> (: acc) <$> evalSelectAux (Map.toList aeMap) pk iName x) [] rowGroups
+        return $ Table (NE.fromList $ List.map snd newPK) [] newTD
+  where
+    evalSelectAux :: [(Expression, (Var, DType))] -> PrimaryKeys -> IndexName -> [Row] -> SQLI Row
+    evalSelectAux ce pk iName td =
+      foldM (\acc (expr, (alias, _)) -> evalExpr expr alias pk iName td <&> (acc `Map.union`)) Map.empty ce
+    evalExpr :: Expression -> Var -> PrimaryKeys -> IndexName -> [Row] -> SQLI Row
+    evalExpr expr alias pk iName td = do
+      exprNorm <- evalEAgg expr td
+      resValue <- evalE exprNorm (List.head td)
+      return $ Map.singleton alias resValue
+
+{- evalGroupBySelect' :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
+evalGroupBySelect' [] (cs, ces) (tn, Table pk iName td) =
+  let rowGroups = if hasAggFun ces then [td] else List.map (: []) td
+   in do
+        (newPK, newIName) <- evalGroupBySelectPKIN Nothing ces pk iName
+        evalSelectRowGroups (cs, ces) tn pk iName newPK newIName rowGroups
+evalGroupBySelect' vars selectParams@(_, ces) (tn, Table pk iName td) = do
+  (newPK, newIName) <- evalGroupBySelectPKIN Nothing ces pk iName
   ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
   td <- evalSort ordering td
   let rowGroups = List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
-   in evalSelectRowGroups selectParams tn pk iName rowGroups
+   in evalSelectRowGroups selectParams tn pk iName newPK newIName rowGroups -}
+
+{- go AllVar ahMap = List.map (\(var, dtype) -> (Var var, (var, dtype))) $ Map.toList ahMap
+go (ColumnName expr) ahMap = [(expr,VarName $ TP.pretty expr,)] -}
+
+evalGroupBySelect :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
+-- If no group by parameter is presented
+-- If there exists an aggregate function, will only present one row. If not, will present into multiple rows
+evalGroupBySelect [] (cs, ces) (tn, Table pk iName td) =
+  let rowGroups = if hasAggFun ces then [td] else List.map (: []) td
+   in do
+        (newPK, newIName) <- evalGroupBySelectPKIN Nothing ces pk iName
+        evalSelectRowGroups (cs, ces) tn pk iName newPK newIName rowGroups
+evalGroupBySelect vars selectParams@(_, ces) (tn, Table pk iName td) = do
+  (newPK, newIName) <- evalGroupBySelectPKIN Nothing ces pk iName
+  ordering <- getOrdering (List.map (,Nothing,Nothing) vars)
+  td <- evalSort ordering td
+  let rowGroups = List.groupBy (\r1 r2 -> EQ == ordering r1 r2) td
+   in evalSelectRowGroups selectParams tn pk iName newPK newIName rowGroups
 
 {-
 Steps for select
@@ -592,11 +748,99 @@ Still need to do
   2. renaming
 -}
 
-evalSelectRowGroups :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
-evalSelectRowGroups (cs, ce) tn pk iName rowGroups =
-  Table pk iName
+{-
+How can primary keys exists
+1. If the first level variables is a superset of the primary key
+2. If there exists a variable that is the first element of group by
+-}
+
+{-
+Determine primary key -> next step is to get the rest of them
+-}
+
+deterPK :: Maybe Var -> [ColumnExpression] -> PrimaryKeys -> Maybe PrimaryKeys
+deterPK fstGroup ces pk =
+  let pkMap = Map.fromList $ NE.toList pk
+   in let pospkMap = foldMap (`extractPosPK` pkMap) ces
+       in let identifiedPK = foldMap (\x -> maybeToList $ Map.lookup (fst x) pospkMap) pk
+           in if length identifiedPK == length pk
+                then Just $ NE.fromList identifiedPK
+                else Just . NE.singleton =<< flip Map.lookup pospkMap =<< fstGroup
+
+test_deterPK :: Test
+test_deterPK =
+  TestList
+    [ deterPK Nothing [ColumnName (Var $ VarName "order_id")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Just (NE.fromList [(VarName "order_id", IntType 16)]),
+      deterPK Nothing [ColumnName (Var $ VarName "order_id"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Just (NE.fromList [(VarName "order_id", IntType 16)]),
+      deterPK Nothing [ColumnName (Var $ VarName "name"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Nothing,
+      deterPK (Just $ VarName "name") [ColumnName (Var $ VarName "name"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Nothing,
+      deterPK (Just $ VarName "name") [ColumnName (Var $ VarName "name"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Just (NE.fromList [(VarName "name", IntType 16)])
+    ]
+
+extractPosPK :: ColumnExpression -> Map Var DType -> Map Var (Var, DType)
+extractPosPK AllVar typeMap = Map.mapWithKey (,) typeMap
+extractPosPK (ColumnName expr) typeMap =
+  let alias = VarName $ TP.pretty expr
+   in case extractPosPKExpr expr alias typeMap of
+        Nothing -> Map.empty
+        Just pospk -> uncurry Map.singleton pospk
+extractPosPK (ColumnAlias expr alias) pk =
+  case extractPosPKExpr expr (VarName alias) pk of
+    Nothing -> Map.empty
+    Just pospk -> uncurry Map.singleton pospk
+
+test_extractPosPK :: Test
+test_extractPosPK =
+  TestList
+    [ extractPosPK (ColumnName (Var $ VarName "order_id")) (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order_id", IntType 16))],
+      extractPosPK (ColumnAlias (Var $ VarName "order_id") "order") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order", IntType 16))],
+      extractPosPK AllVar (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order_id", IntType 16)), (VarName "amount", (VarName "amount", IntType 32))]
+    ]
+
+-- | Given an expression, a variable, and a map for primary key
+-- Return a variable, its alias and data type, should it exists in the
+-- Primary key map
+extractPosPKExpr :: Expression -> Var -> Map Var DType -> Maybe (Var, (Var, DType))
+extractPosPKExpr expr@(Var var) alias typeMap =
+  (\x -> (var, (alias, x))) <$> inferExprType expr typeMap
+extractPosPKExpr (Val _) _ _ = Nothing
+extractPosPKExpr (Op1 uop expr1) alias pk = extractPosPKExpr expr1 alias pk
+extractPosPKExpr (Op2 expr1 bop expr2) alias pk =
+  let pospk1 = extractPosPKExpr expr1 alias pk
+   in let pospk2 = extractPosPKExpr expr2 alias pk
+       in case (pospk1, pospk2) of
+            (Just _, Nothing) -> pospk1
+            (Nothing, Just _) -> pospk2
+            _ -> Nothing
+extractPosPKExpr (AggFun _ _ expr) alias pk = extractPosPKExpr expr alias pk
+extractPosPKExpr (Fun _ expr) alias pk = extractPosPKExpr expr alias pk
+
+test_extractPosPKExpr :: Test
+test_extractPosPKExpr =
+  TestList
+    [ extractPosPKExpr (Var $ VarName "order_id") (VarName "order_id") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Just (VarName "order_id", (VarName "order_id", IntType 16)),
+      extractPosPKExpr (Val $ IntVal 1) (VarName "order_id") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Nothing,
+      extractPosPKExpr (Op1 Neg $ Var $ VarName "order_id") (VarName "order") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Just (VarName "order_id", (VarName "order", IntType 16))
+    ]
+
+{- extractpospkexpr expr1 -}
+extractAH :: [ColumnExpression] -> PrimaryKeys -> IndexName -> Map Var DType
+extractAH ces pk iName =
+  let ahMap = Map.fromList (NE.toList pk) `Map.union` Map.fromList iName
+   in List.foldr (\x acc -> extractAHAux x ahMap `Map.union` acc) Map.empty ces
+  where
+    extractAHAux :: ColumnExpression -> Map Var DType -> Map Var DType
+    extractAHAux AllVar ahMap = ahMap
+    extractAHAux (ColumnName expr) ahMap =
+      maybe Map.empty (Map.singleton (VarName $ TP.pretty expr)) $ inferExprType expr ahMap
+    extractAHAux (ColumnAlias expr alias) ahMap =
+      maybe Map.empty (Map.singleton (VarName $ TP.pretty alias)) $ inferExprType expr ahMap
+
+evalSelectRowGroups :: (CountStyle, [ColumnExpression]) -> TableName -> PrimaryKeys -> IndexName -> PrimaryKeys -> IndexName -> [[Row]] -> SQLI Table
+evalSelectRowGroups (cs, ce) tn pk iName newPK newIName rowGroups =
+  Table newPK newIName
     <$> foldrM
-      (\x acc -> evalSelectAux ce pk iName x >>= (\y -> return (y : acc)))
+      (\x acc -> (: acc) <$> evalSelectAux ce pk iName x)
       []
       rowGroups
   where
@@ -686,6 +930,9 @@ emptyTable =
 emptyRow :: Row
 emptyRow = Map.empty
 
+emptyStore :: Store
+emptyStore = Store emptyScope Map.empty
+
 tableSampleGradesTXT = "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,Math,92\n2,English,88\n2,History,76\n3,Math,78\n3,English,95\n3,History,84\n4,Math,90\n4,English,85\n4,History,88\n5,Math,86\n5,English,92\n5,History,80"
 
 tableSampleGradesPK = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)]
@@ -739,13 +986,13 @@ tableMapEither f t = do
 tableLength :: Table -> Int
 tableLength = length . tableData
 
-evalCreateCommand :: CreateCommand -> SQLI ()
+evalCreateCommand :: CreateCommand -> SQLI Table
 evalCreateCommand (CreateCommand ifnotexists namecreate idcreate) = do
   tableMaybe <- getTable namecreate
   table <- evalIDCreate idcreate
   if ifnotexists && isJust tableMaybe
-    then return ()
-    else setScope namecreate table
+    then return emptyTable
+    else setScope namecreate table >> return table
 
 evalIDCreate :: [(Name, DType, Bool)] -> SQLI Table
 evalIDCreate idcreate = do
@@ -759,9 +1006,15 @@ evalIDCreate idcreate = do
         Right var -> return (var, dtype)
         Left _ -> throwError "Fail to parse name"
 
-evalDeleteCommand :: DeleteCommand -> SQLI ()
+test208 = [("\"COUNT(order_id)\"", IntType 16, True)]
+
+-- >>> interp (evalIDCreate test208) emptyStore
+-- Right (Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = []})
+
+evalDeleteCommand :: DeleteCommand -> SQLI Table
 evalDeleteCommand (DeleteCommand fromdelete whdelete) = do
   delScope fromdelete
+  return emptyTable
 
 {- let pkList = List.foldr (\x acc -> parseIDCreate x) idcreate
  in let indexName = List.filter (\(_, _, isPrimary) -> not isPrimary) idcreate in

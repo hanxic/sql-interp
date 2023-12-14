@@ -93,6 +93,30 @@ instance SPP.PP Table where
      in ppLine (ppPrimaryKeys pk <> if null iName then PP.empty else PP.comma <> ppIndexName iName)
           <> PP.hcat (PP.punctuate (PP.text "\n") (map (ppRow indices) td))
 
+ppScope :: Scope -> Doc
+ppScope scope =
+  let tntList = Map.toList scope
+   in PP.hcat (PP.punctuate (PP.text "\n") (map ppScopeAux tntList))
+  where
+    ppScopeAux :: (TableName, Table) -> Doc
+    ppScopeAux (tn, table) = ppHLine <> SPP.pp tn <> ppHLine <> PP.text "\n" <> SPP.pp table <> PP.text "\n" <> ppHLine <> SPP.pp tn <> ppHLine
+    ppHLine :: Doc
+    ppHLine = PP.text "--------"
+
+ppAlias :: Alias -> Doc
+ppAlias alias =
+  let tntnList = Map.toList alias
+   in PP.text "++++++++" <> PP.text "ALIAS" <> PP.text "++++++++" <> PP.text "\n" <> PP.hcat (PP.punctuate (PP.text "\n") (map ppAliasAux tntnList))
+  where
+    ppAliasAux :: (TableName, TableName) -> Doc
+    ppAliasAux (tn1, tn2) = PP.text tn1 <+> PP.text "->" <+> PP.text tn2
+
+instance SPP.PP Store where
+  pp (Store scope alias) = ppScope scope <> PP.text "\n" <> ppAlias alias
+
+printStore :: Store -> String
+printStore = pretty
+
 {- PP.cat
   (map (ppLine . ppRow indices) td) -}
 

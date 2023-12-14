@@ -10,6 +10,7 @@ import Test.QuickCheck (Arbitrary (..), Gen)
 import Test.QuickCheck qualified as QC
 import Text.PrettyPrint (Doc, (<+>))
 import Text.PrettyPrint qualified as PP
+import Utils
 
 class PP a where
   pp :: a -> Doc
@@ -62,7 +63,7 @@ instance PP OrderTypeAD where
 instance PP DValue where
   pp (IntVal i) = pp i
   pp (BoolVal b) = pp b
-  pp (StringVal s) = PP.text ("\"" <> s <> "\"")
+  pp (StringVal s) = PP.quotes $ PP.text s {- PP.text ("\'" <> s <> "\'") -}
   pp NullVal = PP.text "NULL"
 
 -- >>> pp (StringVal "")
@@ -299,8 +300,11 @@ instance PP Query where
   pp (DeleteQuery dc) = pp dc
   pp (CreateQuery cc) = pp cc
 
-printQueries :: [Query] -> Doc
-printQueries qs = PP.hsep (map pp qs)
+prettyPrintQueries :: Queries -> Doc
+prettyPrintQueries qs = PP.hsep (map pp qs)
+
+printQueries :: Queries -> String
+printQueries = PP.render . prettyPrintQueries
 
 -- TODO: Add nested to make sure not over 80 words
 

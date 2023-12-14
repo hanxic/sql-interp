@@ -13,6 +13,7 @@ import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Text.ParserCombinators.ReadP (count)
 import Text.PrettyPrint (render)
+import Utils
 
 errorMsgUnitTest :: Either String b
 errorMsgUnitTest = Left "No parses"
@@ -32,8 +33,8 @@ prop_roundtrip_create cc = P.parse ccP (SPP.pretty cc) == Right cc
 prop_roundtrip_delete :: DeleteCommand -> Bool
 prop_roundtrip_delete dc = P.parse dcP (SPP.pretty dc) == Right dc
 
-prop_roundtrip_queries :: [Query] -> Bool
-prop_roundtrip_queries qs = P.parse sqlP (render $ SPP.printQueries qs) == Right qs
+prop_roundtrip_queries :: Queries -> Bool
+prop_roundtrip_queries qs = P.parse sqlP (SPP.printQueries qs) == Right qs
 
 wsP :: Parser a -> Parser a
 wsP p = many P.space *> p <* many P.space
@@ -128,16 +129,16 @@ stringInP c f = P.between cP (f $ escape (c ==)) cP
     cP = P.char c
 
 stringValP :: Parser DValue
-stringValP = StringVal <$> wsP (stringInP '\"' many)
+stringValP = StringVal <$> wsP (stringInP '\'' many)
 
 test_stringValP :: Test
 test_stringValP =
   TestList
-    [ P.parse stringValP "\"a\"" ~?= Right (StringVal "a"),
-      P.parse stringValP "\"a\\\"\"" ~?= Right (StringVal "a\\"),
-      P.parse (many stringValP) "\"a\"   \"b\""
+    [ P.parse stringValP "\'a\'" ~?= Right (StringVal "a"),
+      P.parse stringValP "\'a\\\'\'" ~?= Right (StringVal "a\\"),
+      P.parse (many stringValP) "\'a\'   \'b\'"
         ~?= Right [StringVal "a", StringVal "b"],
-      P.parse (many stringValP) "\" a\"   \"b\""
+      P.parse (many stringValP) "\' a\'   \'b\'"
         ~?= Right [StringVal " a", StringVal "b"]
     ]
 
@@ -261,7 +262,7 @@ starP :: Parser ColumnExpression
 starP = AllVar <$ wsP (P.string "*")
 
 nameP :: Parser String
-nameP = P.filter isValidName (wsP $ some baseP)
+nameP = P.filter isValidName (wsP (some baseP <|> (\s -> "\"" ++ s ++ "\"") <$> stringInP '\"' many))
   where
     baseP :: Parser Char
     baseP = P.choice [P.alpha, P.digit, P.underscore]
@@ -273,6 +274,7 @@ varP :: Parser Var
 varP =
   wsP
     ( (Dot <$> pFVarName <*> (P.char '.' *> varP))
+        <|> (VarName <$> wsP (stringInP '\"' many))
         <|> (VarName <$> pFVarName)
         -- String name for column should be not empty)
     )
@@ -292,7 +294,7 @@ test_varP =
     [ P.parse varP "*" ~?= errorMsgUnitTest,
       P.parse varP "1st" ~?= errorMsgUnitTest,
       P.parse varP "st1" ~?= Right (VarName "st1"),
-      P.parse varP "\"\"" ~?= errorMsgUnitTest,
+      P.parse varP "\"\"" ~?= Right (VarName ""),
       -- TODO: not dealing with "\t" here. Maybe we should?
       P.parse varP "st.st1" ~?= Right (Dot "st" $ VarName "st1")
     ]
@@ -602,9 +604,9 @@ groupbySelectP =
 test_groupbySelectP :: Test
 test_groupbySelectP =
   TestList
-    [ P.parse groupbySelectP "GROUP BY" ~?= errorMsgUnitTest,
-      P.parse groupbySelectP "GROUP" ~?= errorMsgUnitTest,
-      P.parse groupbySelectP "" ~?= errorMsgUnitTest,
+    [ P.parse groupbySelectP "GROUP BY" ~?= Right [],
+      P.parse groupbySelectP "GROUP" ~?= Right [],
+      P.parse groupbySelectP "" ~?= Right [],
       P.parse groupbySelectP "GROUP BY S" ~?= Right [VarName "S"]
     ]
 
@@ -619,9 +621,9 @@ orderbySelectP =
 test_orderbySelectP :: Test
 test_orderbySelectP =
   TestList
-    [ P.parse orderbySelectP "ORDER" ~?= errorMsgUnitTest,
-      P.parse orderbySelectP "ORDER BY" ~?= errorMsgUnitTest,
-      P.parse orderbySelectP "" ~?= errorMsgUnitTest, -- Not the right test cases
+    [ P.parse orderbySelectP "ORDER" ~?= Right [],
+      P.parse orderbySelectP "ORDER BY" ~?= Right [],
+      P.parse orderbySelectP "" ~?= Right [], -- Not the right test cases
       P.parse orderbySelectP "ORDER BY S" ~?= Right [(VarName "S", Nothing, Nothing)],
       P.parse orderbySelectP "ORDER BY S ASC, A DESC" ~?= Right [(VarName "S", Just ASC, Nothing), (VarName "A", Just DESC, Nothing)],
       P.parse orderbySelectP "ORDER BY S ASC, A NULLS FIRST " ~?= Right [(VarName "S", Just ASC, Nothing), (VarName "A", Nothing, Just NULLSFIRST)]
@@ -641,9 +643,9 @@ limitSelectP =
 test_limitSelectP :: Test
 test_limitSelectP =
   TestList
-    [ P.parse limitSelectP "LIMIT" ~?= errorMsgUnitTest,
+    [ P.parse limitSelectP "LIMIT" ~?= Right Nothing,
       P.parse limitSelectP "LIMIT 1" ~?= Right (Just 1),
-      P.parse limitSelectP "    " ~?= errorMsgUnitTest,
+      P.parse limitSelectP "    " ~?= Right Nothing,
       P.parse limitSelectP "    ;" ~?= Right Nothing
     ]
 
@@ -661,9 +663,9 @@ offsetSelectP =
 test_offsetSelectP :: Test
 test_offsetSelectP =
   TestList
-    [ P.parse offsetSelectP "OFFSET" ~?= errorMsgUnitTest,
+    [ P.parse offsetSelectP "OFFSET" ~?= Right Nothing,
       P.parse offsetSelectP "OFFSET 1" ~?= Right (Just 1),
-      P.parse offsetSelectP "   " ~?= errorMsgUnitTest,
+      P.parse offsetSelectP "   " ~?= Right Nothing,
       P.parse offsetSelectP " ;" ~?= Right Nothing
     ]
 
@@ -678,7 +680,7 @@ scP =
     <*> limitSelectP
     <*> offsetSelectP
 
-test203 = P.doParse exprsSelectP "SELECT *\n"
+test203 = P.doParse scP "SELECT o.order_id, o.item, o.amount, c.first_name, c.last_name, c.age, c.country\nFROM Orders AS o\nJOIN Customers AS c ON o.customer_id = c.customer_id\nJOIN Shippings AS s ON o.customer_id = s.customer\nWHERE s.status = 'Delivered';"
 
 -- >>> test203
 -- Just ((All,[AllVar]),"")
@@ -737,16 +739,30 @@ idCreateP =
     <*> dTypeP
     <*> (True <$ pWords ["PRIMARY", "KEY"] <|> pure False)
 
+test102 = "CREATE TABLE answer\n(\norder_id INTEGER PRIMARY KEY,\n\"amount + 5\" INTEGER,\ncustomer_id INTEGER\n);"
+
 test_idCreateP :: Test
 test_idCreateP =
   TestList
-    [ P.parse idCreateP "id BIGINT NOT NULL PRIMARY KEY" ~?= Right ("id", IntType 32, True),
-      P.parse idCreateP "id BOOLEAN NOT NULL PRIMARY KEY" ~?= Right ("id", BoolType, True),
-      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, False)
+    [ P.parse idCreateP "id BIGINT PRIMARY KEY" ~?= Right ("id", IntType 32, True),
+      P.parse idCreateP "id BOOLEAN PRIMARY KEY" ~?= Right ("id", BoolType, True),
+      P.parse idCreateP "Var4 INT(26) PRIMARY KEY" ~?= Right ("Var4", IntType 26, True)
     ]
 
 ccP :: Parser CreateCommand
 ccP = CreateCommand <$> ccPrefixP <*> nameP <*> parens (P.sepBy1 idCreateP P.comma)
+
+test103 = P.doParse sqlP test102
+
+test104 = "\"amount + 5\" INTEGER,\ncustomer_id INTEGER\n"
+
+test105 = P.doParse idCreateP test104
+
+-- >>> test105
+-- Just (("amount + 5",IntType 16,False),",\ncustomer_id INTEGER\n")
+
+-- >>> test103
+-- Just ([CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "answer", idCreate = [("order_id",IntType 16,True),("amount + 5",IntType 16,False),("customer_id",IntType 16,False)]})],"")
 
 test_ccP :: Test
 test_ccP =
@@ -763,13 +779,16 @@ dcP = dcPrefixP *> (DeleteCommand <$> nameP <*> whSelectP)
 queryP :: Parser Query
 queryP = SelectQuery <$> scP <|> DeleteQuery <$> dcP <|> CreateQuery <$> ccP
 
-sqlP :: Parser [Query]
+sqlP :: Parser Queries
 sqlP = many (queryP <* wsP (P.char ';'))
+
+parseSQLFile :: String -> IO (Either P.ParseError Queries)
+parseSQLFile = P.parseFromFile (sqlP <* P.eof)
 
 test_sqlP :: Test
 test_sqlP =
   TestList
-    [ P.parse sqlP "CREATE TABLE Grades (student_id INTEGER); CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255))"
+    [ P.parse sqlP "CREATE TABLE Grades (student_id INTEGER); CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255));"
         ~?= Right
           [ CreateQuery $
               CreateCommand
@@ -785,6 +804,11 @@ test_sqlP =
                 ]
           ]
     ]
+
+test1108 = P.doParse sqlP "CREATE TABLE Students (student_id INTEGER PRIMARY KEY, name VARCHAR(255));"
+
+-- >>> test1108
+-- Just ([CreateQuery (CreateCommand {ifNotExists = False, nameCreate = "Students", idCreate = [("student_id",IntType 16,True),("name",StringType 255,False)]})],"")
 
 test_all :: IO Counts
 test_all =
@@ -812,20 +836,9 @@ test_all =
         test_offsetSelectP,
         test_ccPrefixP,
         test_idCreateP,
-        test_ccP
+        test_ccP,
+        test_sqlP
       ]
-
-test102 = [CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0", BoolType, True), ("Var0", StringType 156, True), ("Var2", BoolType, True)]}), DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})]
-
-test103 = render $ SPP.printQueries test102
-
--- >>> test103
--- "CREATE TABLE IF NOT EXISTS Table0 (Var0 BOOLEAN PRIMARY KEY, Var0 VARCHAR(156) PRIMARY KEY, Var2 BOOLEAN PRIMARY KEY); DELETE FROM Table4 WHERE AVG(DISTINCT 4512371);"
-
-test104 = P.doParse sqlP test103
-
--- >>> test104
--- Just ([CreateQuery (CreateCommand {ifNotExists = True, nameCreate = "Table0", idCreate = [("Var0",BoolType,True),("Var0",StringType 156,True),("Var2",BoolType,True)]}),DeleteQuery (DeleteCommand {fromDelete = "Table4", whDelete = Just (AggFun Avg Distinct (Val (IntVal 4512371)))})],"")
 
 qc :: IO ()
 qc = do
@@ -839,3 +852,5 @@ qc = do
   QC.quickCheck prop_roundtrip_create
   putStrLn "roundtrip_delete"
   QC.quickCheck prop_roundtrip_delete
+  putStrLn "roundtrip_queries"
+  QC.quickCheck prop_roundtrip_queries

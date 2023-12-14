@@ -19,6 +19,8 @@ data Query
   | CreateQuery CreateCommand
   deriving (Eq, Show)
 
+type Queries = [Query]
+
 -- **** Section for DeleteCommand ****
 
 {- Awesome grammar source: https://forcedotcom.github.io/phoenix/
@@ -40,7 +42,7 @@ data ColumnExpression
 data CountStyle
   = Distinct
   | All
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 type TableName = String
 
@@ -60,30 +62,6 @@ data JoinStyle
 
 type JoinNames = [(Var, Var)]
 
-isBase :: Expression -> Bool
-isBase Val {} = True
-isBase Var {} = True
-isBase Op1 {} = True
-isBase Fun {} = True
-isBase AggFun {} = True
-isBase _ = False
-
-level :: Bop -> Int
-level Times = 20
-level Divide = 20
-level Modulo = 20
-level Plus = 17
-level Minus = 17
-level Eq = 15
-level Gt = 15
-level Ge = 15
-level Lt = 15
-level Le = 15
-level Is = 15
-level Like = 15
-level And = 8
-level Or = 7
-
 data Expression
   = Var Var -- e.g. A
   | Val DValue
@@ -91,7 +69,7 @@ data Expression
   | Op2 Expression Bop Expression -- e.g. A + 2
   | AggFun AggFunction CountStyle Expression -- e.g. SUM / AVG
   | Fun Function Expression
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 data Var
   = VarName Name
@@ -106,7 +84,7 @@ data Var
 data Uop
   = Not
   | Neg
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data Bop
   = Plus
@@ -123,7 +101,7 @@ data Bop
   | Or
   | Like
   | Is
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data AggFunction
   = Avg
@@ -131,19 +109,19 @@ data AggFunction
   | Max
   | Min
   | Sum
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data Function
   = Len
   | Lower
   | Upper
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data DType
   = StringType Int
   | IntType Int
   | BoolType
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 data DValue
   = IntVal Int
@@ -151,13 +129,6 @@ data DValue
   | StringVal String
   | NullVal
   deriving (Eq, Show, Ord)
-
-dvalueTypeCheck :: DValue -> DType -> Bool
-dvalueTypeCheck NullVal _ = True
-dvalueTypeCheck (IntVal _) (IntType _) = True
-dvalueTypeCheck (BoolVal _) BoolType = True
-dvalueTypeCheck (StringVal _) (StringType _) = True
-dvalueTypeCheck _ _ = False
 
 type Name = String
 

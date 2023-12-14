@@ -19,6 +19,7 @@ import TableSyntax (Header, IndexName, PrimaryKeys, Row, Table (Table, indexName
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import Text.PrettyPrint (Doc, render)
+import Utils
 
 prop_roundtrip_header :: Header -> Bool
 prop_roundtrip_header h = P.parse headerP (Text.PrettyPrint.render $ TP.ppHeader h) == Right h
@@ -59,6 +60,7 @@ varTP :: Parser Var
 varTP =
   (Dot <$> tpFVarName <*> (P.char '.' *> varTP)) <* spacesP
     <|> (VarName <$> tpFVarName)
+    <|> (VarName <$> SP.wsP (SP.stringInP '\"' many))
 
 tpFVarName :: Parser String
 tpFVarName =
@@ -286,8 +288,28 @@ test = Char.isSpace
 tableP :: PrimaryKeys -> IndexName -> Parser Table
 tableP pk iName = do
   ah <- SP.wsP (validHeaderP pk iName)
+  guard (not $ null ah)
   tableData <- ([] <$ (many P.space *> P.eof)) <|> P.sepBy (rowP ah <* spacesP) newLineP
   return (Table pk iName tableData)
+
+parseCSVFile :: PrimaryKeys -> IndexName -> String -> IO (Either P.ParseError Table)
+parseCSVFile pk iName = P.parseFromFile (const <$> tableP pk iName <*> P.eof)
+
+test201 = NE.fromList [(VarName "COUNT(order_id)", IntType 16)]
+
+test202 = []
+
+test203 = "\"COUNT(order_id)\"\n1\n1\n2\n1"
+
+test204 = P.doParse (validHeaderP test201 test202) test203
+
+-- >>> test204
+-- Just ([(VarName "COUNT(order_id)",IntType 16)],"1\n1\n2\n1")
+
+test205 = P.doParse (tableP test201 test202) test203
+
+-- >>> test205
+-- Just (Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = [fromList [(VarName "COUNT(order_id)",IntVal 1)],fromList [(VarName "COUNT(order_id)",IntVal 1)],fromList [(VarName "COUNT(order_id)",IntVal 2)],fromList [(VarName "COUNT(order_id)",IntVal 1)]]},"")
 
 test_all :: IO Counts
 test_all =
