@@ -114,8 +114,7 @@ optimizeWhereJoin :: SelectCommand -> SelectCommand
 optimizeWhereJoin sc
   | hasJoin sc =
       sc
-        { whSelect = Nothing,
-          fromSelect = unpackPushWhere (whSelect sc) (fromSelect sc)
+        { fromSelect = unpackPushWhere (whSelect sc) (fromSelect sc)
         }
 optimizeWhereJoin sc = sc
 
@@ -357,7 +356,7 @@ sampleJoinNoOpt2 =
           Op2
             (Op2 (Var $ Dot "Grades" (VarName "grade")) Ge (Val $ IntVal 90))
             And
-            (Op2 (Var $ Dot "Students" (VarName "gender")) Is (Val $ StringVal "Female")),
+            (Op2 (Var $ Dot "Students" (VarName "gender")) Is (Val $ StringVal "Male")),
       groupbySelect = [],
       orderbySelect = [],
       limitSelect = Nothing,
