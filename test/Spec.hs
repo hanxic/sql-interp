@@ -21,6 +21,8 @@ main = do
   TestTable.qc
   putStrLn "Unit Testing for Interpretation"
   TestInterpretation.test_all
+  putStrLn "Property-Based Testing for Interpretation"
+  TestInterpretation.qc
   putStrLn "Unit Testing for Optimization"
   TestOptimization.test_all
   putStrLn "Property-Based Testing for Optimization"

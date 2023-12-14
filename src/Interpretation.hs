@@ -44,20 +44,15 @@ import Text.Regex.Base qualified as REGEX
 import Text.Regex.Posix qualified as POSIX ((=~))
 import Utils
 
-{- import Test.QuickCheck.Monadic qualified as QCM -}
+-------- Monad Transformer declaration and helper function --------
 
 type SQLI a = ExceptT String (State Store) a
-
-{- Helper function on monad manipulation -}
 
 getAlias :: SQLI (Map TableName TableName)
 getAlias = do S.gets alias
 
 goStEx :: a -> (a -> SQLI a) -> Store -> (Either String a, Store)
 goStEx a f store = f a & runExceptT & flip runState store
-
-prop_roundtrip_getAlias :: Store -> Bool
-prop_roundtrip_getAlias store = fst (goStEx Map.empty (const getAlias) store) == Right (alias store)
 
 getAliasName :: TableName -> SQLI TableName
 getAliasName tn = do Map.findWithDefault tn tn <$> getAlias
@@ -91,9 +86,6 @@ getFreeName :: SQLI TableName
 getFreeName = do
   i <- getFreeNameCount
   return $ "_Table" ++ show i
-
-prop_roundtrip_getScope :: Store -> Bool
-prop_roundtrip_getScope store = fst (goStEx Map.empty (const getScope) store) == Right (scope store)
 
 getScope :: SQLI Scope
 getScope = do S.gets scope
@@ -129,6 +121,41 @@ hideScope sqli = do
   S.put store
   return result
 
+-------- Helper function for running SQLI --------
+interp :: SQLI a -> Store -> Either String a
+interp = S.evalState . runExceptT
+
+exec :: SQLI a -> Store -> Store
+exec = S.execState . runExceptT
+
+run :: SQLI a -> Store -> (Either String a, Store)
+run = S.runState . runExceptT
+
+-------- Evaluation --------
+eval :: Queries -> SQLI ()
+eval = mapM_ evalQuery
+
+evalQuery :: Query -> SQLI Table
+evalQuery (SelectQuery q) = evalSelectCommand q
+evalQuery (DeleteQuery q) = evalDeleteCommand q
+evalQuery (CreateQuery q) = evalCreateCommand q
+
+evalSelectCommand :: SelectCommand -> SQLI Table
+evalSelectCommand q = do
+  tableFrom <- evalFrom (fromSelect q)
+  tableWhere <- evalWhere (whSelect q) tableFrom
+  tableGroupBy <-
+    evalGroupBySelect1
+      (groupbySelect q)
+      (exprsSelect q)
+      tableWhere
+  tableOrder <- evalOrderBy (orderbySelect q) tableGroupBy
+  tableOffset <- evalOffset (offsetSelect q) tableOrder
+  tableResult <- evalLimit (limitSelect q) tableOffset
+  freename <- getFreeName
+  setScope freename tableResult
+  return tableResult
+
 -- @Gary THIS IS THE MAIN WORK HORSE
 -- 1. Find the table referenced in FROM
 -- 2. Filter out the rows we don't care about
@@ -137,6 +164,7 @@ hideScope sqli = do
 -- 5. Slice the top N rows based on Limit/Offset
 -- X. TODO GroupBy, I am thinking of branching
 
+-- | Evaluation of from clause. This includes evaluating join and subquery
 evalFrom :: FromExpression -> SQLI (TableName, Table)
 evalFrom (TableRef tn) = do
   mt <- getTable tn
@@ -160,42 +188,44 @@ evalFrom (SubQuery q) = do
   newName <- getFreeName
   return (newName, table)
 
-interp :: SQLI a -> Store -> Either String a
-interp = S.evalState . runExceptT
-
-exec :: SQLI a -> Store -> Store
-exec = S.execState . runExceptT
-
-run :: SQLI a -> Store -> (Either String a, Store)
-run = S.runState . runExceptT
-
-evalJoin :: (TableName, Table) -> JoinStyle -> (TableName, Table) -> JoinNames -> SQLI (TableName, Table)
+-- | evalJoin is a helper function that get the join ordering function as well
+-- as generating a new name for the table
+evalJoin ::
+  (TableName, Table) ->
+  JoinStyle ->
+  (TableName, Table) ->
+  JoinNames ->
+  SQLI (TableName, Table)
 evalJoin (tn1, table1) js (tn2, table2) [] = do
   freeName <- getFreeName
   let joinSpec = const $ const True
-   in (freeName,) <$> evalJoinTable table1 js table2 joinSpec {- evalJoinStyle table1 OuterJoin table2 joinSpec -}
+   in (freeName,) <$> evalJoinTable table1 js table2 joinSpec
 evalJoin (tn1, table1) js (tn2, table2) jns = do
   freeName <- getFreeName
   joinSpec <- getJoinSpec tn1 tn2 jns
   (freeName,) <$> evalJoinTable table1 js table2 joinSpec
 
-{- table <- {- evalJoinStyle table1 js table2 joinSpec -}
-return (freeName, table) -}
-
+-- | mergeIndex will combine the two index to make sure no redundency
 mergeIndex :: IndexName -> IndexName -> IndexName
 mergeIndex in1 in2 =
   let inMap1 = Map.fromList in1
    in let inMap2 = Map.fromList in2
        in Map.toList $ Map.union inMap1 inMap2
 
+-- | mergePrimaryKeys will combine the two primary key lists and make sure no redundency
 mergePrimaryKeys :: PrimaryKeys -> PrimaryKeys -> PrimaryKeys
 mergePrimaryKeys pk1 pk2 =
   NE.fromList $ mergeIndex (NE.toList pk1) (NE.toList pk2)
 
+-- | EvaluJoinTable will take in tables and join spec, it will merge the
+-- signature of the two tables, and then evaluate join based on helper functions
 evalJoinTable :: Table -> JoinStyle -> Table -> (Row -> Row -> Bool) -> SQLI Table
 evalJoinTable (Table pk1 in1 td1) js (Table pk2 in2 td2) joinSpec =
   let mergedPK = mergePrimaryKeys pk1 pk2
-   in let mergedIN = mergeIndex in1 in2 in Table mergedPK mergedIN <$> evalJoinStyle td1 js td2 joinSpec
+   in let mergedIN = mergeIndex in1 in2
+       in Table mergedPK mergedIN <$> evalJoinStyle td1 js td2 joinSpec
+
+-- Different patterns of join
 
 joinMid :: TableData -> TableData -> (Row -> Row -> Bool) -> TableData
 joinMid td1 td2 joinSpec =
@@ -215,7 +245,14 @@ joinRightEx td1 td2 joinSpec =
        in let tdRight = [row2 `Map.union` uninitRow | row2 <- td2, (not . any (joinSpec row2)) td1]
            in tdRight
 
-evalJoinStyle :: TableData -> JoinStyle -> TableData -> (Row -> Row -> Bool) -> SQLI TableData
+-- | Evaluate join style will look at the join style of the query (inner join,
+-- left join, etc.) and will give a new table
+evalJoinStyle ::
+  TableData ->
+  JoinStyle ->
+  TableData ->
+  (Row -> Row -> Bool) ->
+  SQLI TableData
 evalJoinStyle td1 InnerJoin td2 joinSpec =
   return $
     joinMid td1 td2 joinSpec
@@ -238,58 +275,46 @@ evalJoinStyle td1 OuterJoin td2 joinSpec = do
   let tdRight = joinRightEx td1 td2 joinSpec
    in return (tdLeftMid ++ tdRight)
 
-{-
-Anything in left + anything in middle
-1. Get everything in left that are not in middle
-  List comprehension -> Get everything form left such that the f function is not true -> Append them with td1'
-2. Get everything in middle
-  Do the usual evalJoinStyle thing
-3. Merge them together. Simply merge based on newtable.
-
--}
-
--- | Turn joinnames into a single conditional that must be true for two row to be match
-getJoinSpec :: TableName -> TableName -> [(Var, Var)] -> SQLI (Row -> Row -> Bool)
+-- | Turn joinnames into a single conditional that must be true for two row to
+-- be match
+getJoinSpec ::
+  TableName ->
+  TableName ->
+  [(Var, Var)] ->
+  SQLI (Row -> Row -> Bool)
 getJoinSpec tn1 tn2 = foldM (getJoinSpecAux tn1 tn2) (const $ const True)
   where
     throwAliases :: Var -> Var -> SQLI (Row -> Row -> Bool)
     throwAliases var1 var2 = do
       {- aliasStr <- printAlias -}
-      throwError $ "undefined join names: left is " ++ SP.pretty var1 ++ " right is " ++ SP.pretty var2
-    getJoinSpecAux :: TableName -> TableName -> (Row -> Row -> Bool) -> (Var, Var) -> SQLI (Row -> Row -> Bool)
+      throwError $
+        "undefined join names: left is "
+          ++ SP.pretty var1
+          ++ " right is "
+          ++ SP.pretty var2
+    getJoinSpecAux ::
+      TableName ->
+      TableName ->
+      (Row -> Row -> Bool) ->
+      (Var, Var) ->
+      SQLI (Row -> Row -> Bool)
     getJoinSpecAux tn1 tn2 f (var1, var2) = do
       (alias1, jo1) <- case var1 of
-        VarName name -> throwError "undefined join name: join name needs to be a dot format"
+        VarName name ->
+          throwError "undefined join name: join name needs to be a dot format"
         Dot name jo -> return (name, jo)
       (alias2, jo2) <- case var2 of
-        VarName name -> throwError "undefined join name: join name needs to be a dot format"
+        VarName name ->
+          throwError "undefined join name: join name needs to be a dot format"
         Dot name jo -> return (name, jo)
       if tn1 == alias1 && tn2 == alias2
-        then return $ \row1 row2 -> Map.lookup jo1 row1 == Map.lookup jo2 row2 && f row1 row2
+        then return $ \row1 row2 ->
+          Map.lookup jo1 row1 == Map.lookup jo2 row2 && f row1 row2
         else
           if tn1 == alias2 && tn2 == alias1
-            then return $ \row1 row2 -> Map.lookup jo2 row1 == Map.lookup jo1 row2
+            then return $ \row1 row2 ->
+              Map.lookup jo2 row1 == Map.lookup jo1 row2
             else throwAliases var1 var2
-
-evalQuery :: Query -> SQLI Table
-evalQuery (SelectQuery q) = evalSelectCommand q
-evalQuery (DeleteQuery q) = evalDeleteCommand q
-evalQuery (CreateQuery q) = evalCreateCommand q
-
-eval :: Queries -> SQLI ()
-eval = mapM_ evalQuery
-
-evalSelectCommand :: SelectCommand -> SQLI Table
-evalSelectCommand q = do
-  tableFrom <- evalFrom (fromSelect q)
-  tableWhere <- evalWhere (whSelect q) tableFrom
-  tableGroupBy <- evalGroupBySelect1 (groupbySelect q) (exprsSelect q) tableWhere
-  tableOrder <- evalOrderBy (orderbySelect q) tableGroupBy
-  tableOffset <- evalOffset (offsetSelect q) tableOrder
-  tableResult <- evalLimit (limitSelect q) tableOffset
-  freename <- getFreeName
-  setScope freename tableResult
-  return tableResult
 
 tSC :: String -> Store -> Table -> Test
 tSC commandStr store table =
@@ -323,29 +348,72 @@ evalEAgg (AggFun aggfun cs expr) td = do
   expr' <- evalEAgg expr td
   Val <$> evalEAggAux aggfun cs expr' td
   where
-    evalEAggAux :: AggFunction -> CountStyle -> Expression -> TableData -> SQLI DValue
+    evalEAggAux ::
+      AggFunction ->
+      CountStyle ->
+      Expression ->
+      TableData ->
+      SQLI DValue
     evalEAggAux Sum _ expr td =
       foldM
-        (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc >>= (\i2 -> return $ IntVal (i1 + i2))))
+        ( \acc r ->
+            evalE expr r
+              >>= getInt
+              >>= ( \i1 ->
+                      getInt acc >>= (\i2 -> return $ IntVal (i1 + i2))
+                  )
+        )
         (IntVal 0)
         td
-    evalEAggAux Count _ expr td = foldM (\acc r -> evalE expr r >>= (\x -> getInt acc >>= (\i -> return $ IntVal $ if x /= NullVal then i + 1 else i))) (IntVal 0) td
+    evalEAggAux Count _ expr td =
+      foldM
+        ( \acc r ->
+            evalE expr r
+              >>= ( \x ->
+                      getInt acc
+                        >>= ( \i ->
+                                return $
+                                  IntVal $
+                                    if x /= NullVal then i + 1 else i
+                            )
+                  )
+        )
+        (IntVal 0)
+        td
     -- Count non-bool expression not supported / may generate undefined behavior
-    evalEAggAux Max _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc Data.Functor.<&> (IntVal . max i1))) (IntVal 0) td
-    evalEAggAux Min _ expr td = foldM (\acc r -> evalE expr r >>= getInt >>= (\i1 -> getInt acc Data.Functor.<&> (IntVal . min i1))) (IntVal 0) td
+    evalEAggAux Max _ expr td =
+      foldM
+        ( \acc r ->
+            evalE expr r
+              >>= getInt
+              >>= ( \i1 ->
+                      getInt acc Data.Functor.<&> (IntVal . max i1)
+                  )
+        )
+        (IntVal 0)
+        td
+    evalEAggAux Min _ expr td =
+      foldM
+        ( \acc r ->
+            evalE expr r
+              >>= getInt
+              >>= ( \i1 ->
+                      getInt acc Data.Functor.<&> (IntVal . min i1)
+                  )
+        )
+        (IntVal 0)
+        td
     evalEAggAux Avg cs expr td = do
       s <- evalEAggAux Sum cs expr td
       c <- evalEAggAux Count cs expr td
       case (s, c) of
-        (IntVal numerator, IntVal denomenator) -> if denomenator == 0 then return $ IntVal 0 else return $ IntVal $ numerator `div` denomenator
+        (IntVal numerator, IntVal denomenator) ->
+          if denomenator == 0
+            then return $ IntVal 0
+            else return $ IntVal $ numerator `div` denomenator
         (_, _) -> throwError "AggFunction Type error in Avg"
 
-{- evalEAggNI :: DValue -> DValue -> ()SQLI DValue -}
-
--- first do a regularization in expr -> make sure its Aggfunction free
--- Map each row into some DValue
--- Then Aggregate
-
+-- Helpers
 getInt :: DValue -> SQLI Int
 getInt (IntVal i) = return i
 getInt b@(BoolVal _) = getInt =<< weakCast b (IntType 32)
@@ -357,6 +425,7 @@ getBool (BoolVal b) = return b
 getBool ival@(IntVal _) = getBool =<< weakCast ival BoolType
 getBool v = throwCastError v BoolType
 
+-------- Evaluating expressions
 evalE :: Expression -> Row -> SQLI DValue
 evalE (Var v) r =
   case Map.lookup v r of
@@ -387,7 +456,11 @@ evalOp2 Lt val1 val2 = return $ BoolVal $ val1 < val2
 evalOp2 Le val1 val2 = return $ BoolVal $ val1 <= val2
 evalOp2 And (BoolVal b1) (BoolVal b2) = return $ BoolVal $ b1 && b2
 evalOp2 Or (BoolVal b1) (BoolVal b2) = return $ BoolVal $ b1 || b2
-evalOp2 Like (StringVal str1) (StringVal str2) = return $ BoolVal $ str1 POSIX.=~ str2
+evalOp2 Like (StringVal str1) (StringVal str2) =
+  return $
+    BoolVal $
+      str1
+        POSIX.=~ str2
 evalOp2 Is val1 val2 = evalOp2 Eq val1 val2
 evalOp2 bop NullVal _ = return NullVal -- If either is NULL, return NULL
 evalOp2 bop _ NullVal = return NullVal
@@ -425,17 +498,34 @@ evalFun Upper (StringVal str) = return $ StringVal $ List.map toUpper str
 evalFun _ NullVal = return NullVal
 evalFun fun dval = throwExpressionError (Fun fun (Val dval))
 
+-------- Evaluating Offset and Limit --------
 evalOffset :: Maybe Int -> Table -> SQLI Table
 evalOffset Nothing td = return td
-evalOffset (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.drop i $ tableData table)
+evalOffset (Just i) table
+  | i >= 0 =
+      return $
+        Table
+          (primaryKeys table)
+          (indexName table)
+          (List.drop i $ tableData table)
 evalOffset _ _ = throwError "Offset cannot be negative"
 
 evalLimit :: Maybe Int -> Table -> SQLI Table
 evalLimit Nothing td = return td
-evalLimit (Just i) table | i >= 0 = return $ Table (primaryKeys table) (indexName table) (List.take i $ tableData table)
+evalLimit (Just i) table
+  | i >= 0 =
+      return $
+        Table
+          (primaryKeys table)
+          (indexName table)
+          (List.take i $ tableData table)
 evalLimit _ _ = throwError "Limit cannot be negative"
 
-evalOrderBy :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> Table -> SQLI Table
+--------- Evaluating Order by --------
+evalOrderBy ::
+  [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] ->
+  Table ->
+  SQLI Table
 evalOrderBy [] table = return table
 evalOrderBy orders (Table pk iName td) = do
   ordering <- getOrdering orders
@@ -445,16 +535,18 @@ evalOrderBy orders (Table pk iName td) = do
 evalSort :: (Row -> Row -> Ordering) -> TableData -> SQLI TableData
 evalSort ordering td = return $ List.sortBy ordering td
 
-{-
-sort on the first variable, and group by -> repeatedly sort on the second and group by
-
--}
-
-getOrdering :: [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] -> SQLI (Row -> Row -> Ordering)
+getOrdering ::
+  [(Var, Maybe OrderTypeAD, Maybe OrderTypeFL)] ->
+  SQLI (Row -> Row -> Ordering)
 getOrdering = foldrM decideOrdering (const $ const EQ) -- will not happen
 
--- | A helper function that, given a single order by parameter and a ordering function, returning a new ordering function with the parameter as the first decider
-decideOrdering :: (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) -> (Row -> Row -> Ordering) -> SQLI (Row -> Row -> Ordering)
+-- | A helper function that, given a single order by parameter and a ordering
+-- function, returning a new ordering function with the parameter as the first
+-- decider
+decideOrdering ::
+  (Var, Maybe OrderTypeAD, Maybe OrderTypeFL) ->
+  (Row -> Row -> Ordering) ->
+  SQLI (Row -> Row -> Ordering)
 decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
   let (dval1, dval2) =
         ( Map.findWithDefault NullVal v r1,
@@ -473,7 +565,12 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
             (_, NullVal) -> compare dval1 dval2
             _ -> decideOrderingAux dval1 dval2 mad accF r1 r2
   where
-    decideOrderingAux :: DValue -> DValue -> Maybe OrderTypeAD -> (Row -> Row -> Ordering) -> (Row -> Row -> Ordering)
+    decideOrderingAux ::
+      DValue ->
+      DValue ->
+      Maybe OrderTypeAD ->
+      (Row -> Row -> Ordering) ->
+      (Row -> Row -> Ordering)
     decideOrderingAux dval1 dval2 mad accF r1 r2 =
       case mad of
         Just DESC ->
@@ -486,7 +583,8 @@ decideOrdering (v, mad, mfl) accF = return $ \r1 r2 ->
           EQ -> accF r1 r2
           o -> o
 
--- | A helper function that check whether the select expressions have aggregate function or not
+-- | A helper function that check whether the select expressions have aggregate
+-- function or not
 hasAggFun :: [ColumnExpression] -> Bool
 hasAggFun = List.foldr (\x acc -> acc || hasAggFunCol x) False
   where
@@ -506,16 +604,24 @@ hasAggFunExpr _ = False
 Rethink the workflow for group by
 1. For every column expression, annotated it to have a type
 2. evalGroupBySelect should be correct
-3. The question is about type, if I annotate it first and then find primary keys: Two conditions:
+3. The question is about type, if I annotate it first and then find primary
+   keys: Two conditions:
   1. Either the columns cover all primary keys
   2. Or the first group key is covered in some expression as the main dominator
 
 -}
 
--- | A helper function that, given the first parameter of group by, the select clause, and primary keys and index, return the newer primary keys and index
-evalGroupBySelectPKIN :: Maybe Var -> [ColumnExpression] -> PrimaryKeys -> IndexName -> SQLI (PrimaryKeys, IndexName)
+-- | A helper function that, given the first parameter of group by, the select
+-- clause, and primary keys and index, return the newer primary keys and index
+evalGroupBySelectPKIN ::
+  Maybe Var ->
+  [ColumnExpression] ->
+  PrimaryKeys ->
+  IndexName ->
+  SQLI (PrimaryKeys, IndexName)
 evalGroupBySelectPKIN fstGroup ces pk iName =
-  case deterPK fstGroup ces pk of -- Determine if there exists a primary key, maybe not possible
+  case deterPK fstGroup ces pk of
+    -- Determine if there exists a primary key, maybe not possible
     Nothing -> throwError "No primary key is valid"
     Just pks ->
       let newTypeMap = extractAH ces pk iName
@@ -533,38 +639,65 @@ evalGroupBySelectPKIN fstGroup ces pk iName =
                in return (pks, newIName)
 
 annotatedMapCreate :: PrimaryKeys -> IndexName -> Map Var DType
-annotatedMapCreate pk iName = Map.fromList (NE.toList pk) `Map.union` Map.fromList iName
+annotatedMapCreate pk iName =
+  Map.fromList (NE.toList pk)
+    `Map.union` Map.fromList iName
 
--- | The function for grouping the table by certain columns and then select
--- For performance, group by function will essentially leverage sorting functions and groupping
-annotatedSelect :: [ColumnExpression] -> PrimaryKeys -> IndexName -> SQLI (Map Expression (Var, DType))
+-- | The function for grouping the table by certain columns and then select For
+-- performance, group by function will essentially leverage sorting functions
+-- and groupping
+annotatedSelect ::
+  [ColumnExpression] ->
+  PrimaryKeys ->
+  IndexName ->
+  SQLI (Map Expression (Var, DType))
 annotatedSelect ces pk iName =
   let ahMap = annotatedMapCreate pk iName
    in foldM (go ahMap) Map.empty ces
   where
-    go :: Map Var DType -> Map Expression (Var, DType) -> ColumnExpression -> SQLI (Map Expression (Var, DType))
+    go ::
+      Map Var DType ->
+      Map Expression (Var, DType) ->
+      ColumnExpression ->
+      SQLI (Map Expression (Var, DType))
     go ahMap aeMap AllVar =
       let eMap = Map.mapKeys Var (Map.mapWithKey (,) ahMap)
        in return $ eMap `Map.union` aeMap
     go ahMap aeMap (ColumnName expr) =
       case inferExprType expr ahMap of
         Nothing -> throwError $ "Cannot infer the type of " ++ TP.pretty expr
-        Just dtype -> return $ Map.singleton expr (VarName $ TP.pretty expr, dtype) `Map.union` aeMap
-    {-         >>= (\x -> return $ x `Map.union` aeMap)
-              . (\x -> Map.singleton expr (VarName $ TP.pretty expr, x)) -}
+        Just dtype ->
+          return $
+            Map.singleton
+              expr
+              (VarName $ TP.pretty expr, dtype)
+              `Map.union` aeMap
     go ahMap aeMap (ColumnAlias expr alias) =
       case inferExprType expr ahMap of
-        Nothing -> throwError $ "Cannot infer  the type of " ++ TP.pretty expr
-        Just dtype -> return $ Map.singleton expr (VarName alias, dtype) `Map.union` aeMap
+        Nothing ->
+          throwError $ "Cannot infer  the type of " ++ TP.pretty expr
+        Just dtype ->
+          return $ Map.singleton expr (VarName alias, dtype) `Map.union` aeMap
 
-evalGroupBySelect1 :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
+evalGroupBySelect1 ::
+  [Var] ->
+  (CountStyle, [ColumnExpression]) ->
+  (TableName, Table) ->
+  SQLI Table
 evalGroupBySelect1 vars (cs, ces) (tn, Table pk iName td) = do
   aeMap <- annotatedSelect ces pk iName
   if Map.null aeMap
     then throwError "Zero valid selection"
     else evalGroupBySelectUlt vars aeMap pk iName tn td
 
-evalGroupBySelectUlt :: [Var] -> Map Expression (Var, DType) -> PrimaryKeys -> IndexName -> TableName -> TableData -> SQLI Table
+evalGroupBySelectUlt ::
+  [Var] ->
+  Map Expression (Var, DType) ->
+  PrimaryKeys ->
+  IndexName ->
+  TableName ->
+  TableData ->
+  SQLI Table
 evalGroupBySelectUlt [] aeMap pk iName tn td =
   let rowGroups = if any hasAggFunExpr (keys aeMap) then [td] else List.map (: []) td
    in evalSelectRowGroups' aeMap pk iName rowGroups
@@ -591,9 +724,13 @@ evalSelectRowGroups' aeMap pk iName rowGroups =
       resValue <- evalE exprNorm (List.head td)
       return $ Map.singleton alias resValue
 
-evalGroupBySelect :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
--- If no group by parameter is presented
--- If there exists an aggregate function, will only present one row. If not, will present into multiple rows
+evalGroupBySelect ::
+  [Var] ->
+  (CountStyle, [ColumnExpression]) ->
+  (TableName, Table) ->
+  SQLI Table
+-- If no group by parameter is presented If there exists an aggregate function,
+-- will only present one row. If not, will present into multiple rows
 evalGroupBySelect [] (cs, ces) (tn, Table pk iName td) =
   let rowGroups = if hasAggFun ces then [td] else List.map (: []) td
    in do
@@ -644,14 +781,6 @@ extractPosPKExpr (Op2 expr1 bop expr2) alias pk =
             _ -> Nothing
 extractPosPKExpr (AggFun _ _ expr) alias pk = extractPosPKExpr expr alias pk
 extractPosPKExpr (Fun _ expr) alias pk = extractPosPKExpr expr alias pk
-
-test_extractPosPKExpr :: Test
-test_extractPosPKExpr =
-  TestList
-    [ extractPosPKExpr (Var $ VarName "order_id") (VarName "order_id") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Just (VarName "order_id", (VarName "order_id", IntType 16)),
-      extractPosPKExpr (Val $ IntVal 1) (VarName "order_id") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Nothing,
-      extractPosPKExpr (Op1 Neg $ Var $ VarName "order_id") (VarName "order") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Just (VarName "order_id", (VarName "order", IntType 16))
-    ]
 
 {- extractpospkexpr expr1 -}
 extractAH :: [ColumnExpression] -> PrimaryKeys -> IndexName -> Map Var DType

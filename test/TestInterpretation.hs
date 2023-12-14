@@ -18,6 +18,7 @@ import TableParser qualified as TPAR
 import TablePrinter qualified as TP
 import TableSyntax
 import Test.HUnit
+import Test.QuickCheck qualified as QC
 import TestUtils
 
 type IOS a = StateT IOStore IO a
@@ -308,6 +309,32 @@ test_extractPosPK =
       extractPosPK AllVar (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order_id", IntType 16)), (VarName "amount", (VarName "amount", IntType 32))]
     ]
 
+test_extractPosPKExpr :: Test
+test_extractPosPKExpr =
+  TestList
+    [ extractPosPKExpr
+        (Var $ VarName "order_id")
+        (VarName "order_id")
+        ( Map.fromList
+            [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]
+        )
+        ~?= Just (VarName "order_id", (VarName "order_id", IntType 16)),
+      extractPosPKExpr
+        (Val $ IntVal 1)
+        (VarName "order_id")
+        ( Map.fromList
+            [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]
+        )
+        ~?= Nothing,
+      extractPosPKExpr
+        (Op1 Neg $ Var $ VarName "order_id")
+        (VarName "order")
+        ( Map.fromList
+            [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]
+        )
+        ~?= Just (VarName "order_id", (VarName "order", IntType 16))
+    ]
+
 test_all :: IO Counts
 test_all =
   runTestTT $
@@ -319,5 +346,19 @@ test_all =
         test_evalEAgg,
         test_evalOrderBy,
         test_deterPK,
-        test_extractPosPK
+        test_extractPosPK,
+        test_extractPosPKExpr
       ]
+
+prop_roundtrip_getScope :: Store -> Bool
+prop_roundtrip_getScope store = fst (goStEx Map.empty (const getScope) store) == Right (scope store)
+
+prop_roundtrip_getAlias :: Store -> Bool
+prop_roundtrip_getAlias store = fst (goStEx Map.empty (const getAlias) store) == Right (alias store)
+
+qc :: IO ()
+qc = do
+  putStrLn "roundtrip for getscope"
+  QC.quickCheck prop_roundtrip_getScope
+  putStrLn "roundtrip for getalias"
+  QC.quickCheck prop_roundtrip_getAlias
