@@ -177,12 +177,14 @@ evalJoin :: (TableName, Table) -> JoinStyle -> (TableName, Table) -> JoinNames -
 evalJoin (tn1, table1) js (tn2, table2) [] = do
   freeName <- getFreeName
   let joinSpec = const $ const True
-   in (freeName,) <$> evalJoinStyle table1 OuterJoin table2 joinSpec
+   in (freeName,) <$> evalJoinTable table1 js table2 joinSpec {- evalJoinStyle table1 OuterJoin table2 joinSpec -}
 evalJoin (tn1, table1) js (tn2, table2) jns = do
   freeName <- getFreeName
   joinSpec <- getJoinSpec tn1 tn2 jns
-  table <- evalJoinStyle table1 js table2 joinSpec
-  return (freeName, table)
+  (freeName,) <$> evalJoinTable table1 js table2 joinSpec
+
+{- table <- {- evalJoinStyle table1 js table2 joinSpec -}
+return (freeName, table) -}
 
 mergeIndex :: IndexName -> IndexName -> IndexName
 mergeIndex in1 in2 =
@@ -194,7 +196,75 @@ mergePrimaryKeys :: PrimaryKeys -> PrimaryKeys -> PrimaryKeys
 mergePrimaryKeys pk1 pk2 =
   NE.fromList $ mergeIndex (NE.toList pk1) (NE.toList pk2)
 
-joinMid :: Table -> Table -> (Row -> Row -> Bool) -> Table
+evalJoinTable :: Table -> JoinStyle -> Table -> (Row -> Row -> Bool) -> SQLI Table
+evalJoinTable (Table pk1 in1 td1) js (Table pk2 in2 td2) joinSpec =
+  let mergedPK = mergePrimaryKeys pk1 pk2
+   in let mergedIN = mergeIndex in1 in2 in Table mergedPK mergedIN <$> evalJoinStyle td1 js td2 joinSpec
+
+joinMid :: TableData -> TableData -> (Row -> Row -> Bool) -> TableData
+joinMid td1 td2 joinSpec =
+  [row1 `Map.union` row2 | row1 <- td1, row2 <- td2, joinSpec row1 row2]
+
+test504 = joinMid (tableData tableSampleGrades) (tableData tableSampleStudents) <$> getJoinSpec "Students" "Grades" [(Dot "Students" $ VarName "student_id", Dot "Grades" $ VarName "student_id")]
+
+test505 = interp test504 sampleStore
+
+-- >>> test505
+-- Right [fromList [(VarName "age",IntVal 20),(VarName "first_name",StringVal "John"),(VarName "gender",StringVal "Male"),(VarName "grade",IntVal 85),(VarName "last_name",StringVal "Doe"),(VarName "student_id",IntVal 1),(VarName "subject",StringVal "Math")],fromList [(VarName "age",IntVal 20),(VarName "first_name",StringVal "John"),(VarName "gender",StringVal "Male"),(VarName "grade",IntVal 78),(VarName "last_name",StringVal "Doe"),(VarName "student_id",IntVal 1),(VarName "subject",StringVal "English")],fromList [(VarName "age",IntVal 20),(VarName "first_name",StringVal "John"),(VarName "gender",StringVal "Male"),(VarName "grade",IntVal 92),(VarName "last_name",StringVal "Doe"),(VarName "student_id",IntVal 1),(VarName "subject",StringVal "History")],fromList [(VarName "age",IntVal 21),(VarName "first_name",StringVal "Jane"),(VarName "gender",StringVal "Female"),(VarName "grade",IntVal 88),(VarName "last_name",StringVal "Smith"),(VarName "student_id",IntVal 2),(VarName "subject",StringVal "English")],fromList [(VarName "age",IntVal 21),(VarName "first_name",StringVal "Jane"),(VarName "gender",StringVal "Female"),(VarName "grade",IntVal 76),(VarName "last_name",StringVal "Smith"),(VarName "student_id",IntVal 2),(VarName "subject",StringVal "History")]]
+
+testJoinMidRes1 =
+  [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
+    fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
+    fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
+    fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
+    fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")]
+  ]
+
+test_joinMid :: Test
+test_joinMid =
+  "evaluate Op2" ~:
+    TestList
+      [ interp (joinMid (tableData tableSampleGrades) (tableData tableSampleStudents) <$> getJoinSpec "Students" "Grades" [(Dot "Students" $ VarName "student_id", Dot "Grades" $ VarName "student_id")]) sampleStore ~?= Right testJoinMidRes1
+      ]
+
+joinLeftEx :: TableData -> TableData -> (Row -> Row -> Bool) -> TableData
+joinLeftEx td1 td2 joinSpec =
+  let keys2 = keys $ head td2
+   in let uninitRow = Map.fromList $ List.map (,NullVal) keys2
+       in let tdLeft = [row1 `Map.union` uninitRow | row1 <- td1, (not . any (joinSpec row1)) td2]
+           in tdLeft
+
+joinRightEx :: TableData -> TableData -> (Row -> Row -> Bool) -> TableData
+joinRightEx td1 td2 joinSpec =
+  let keys1 = keys $ head td1
+   in let uninitRow = Map.fromList $ List.map (,NullVal) keys1
+       in let tdRight = [row2 `Map.union` uninitRow | row2 <- td2, (not . any (joinSpec row2)) td1]
+           in tdRight
+
+evalJoinStyle :: TableData -> JoinStyle -> TableData -> (Row -> Row -> Bool) -> SQLI TableData
+evalJoinStyle td1 InnerJoin td2 joinSpec =
+  return $
+    joinMid td1 td2 joinSpec
+evalJoinStyle td1 LeftJoin td2 joinSpec =
+  if List.null td2
+    then return td1
+    else
+      let tdLeft = joinLeftEx td1 td2 joinSpec
+       in let tdMid = joinMid td1 td2 joinSpec
+           in return (tdLeft ++ tdMid)
+evalJoinStyle td1 RightJoin td2 joinSpec =
+  if List.null td1
+    then return td2
+    else
+      let tdRight = joinRightEx td1 td2 joinSpec
+       in let tdMid = joinMid td1 td2 joinSpec
+           in return (tdRight ++ tdMid)
+evalJoinStyle td1 OuterJoin td2 joinSpec = do
+  tdLeftMid <- evalJoinStyle td1 LeftJoin td2 joinSpec
+  let tdRight = joinRightEx td1 td2 joinSpec
+   in return (tdLeftMid ++ tdRight)
+
+{- joinMid :: Table -> Table -> (Row -> Row -> Bool) -> Table
 joinMid (Table pk1 in1 td1) (Table pk2 in2 td2) joinSpec =
   Table
     (mergePrimaryKeys pk1 pk2)
@@ -242,7 +312,7 @@ evalJoinStyle table1 RightJoin table2 joinSpec =
 evalJoinStyle table1 OuterJoin table2 joinSpec = do
   tableLeftMid <- evalJoinStyle table1 LeftJoin table2 joinSpec
   let tableRight = joinRightEx table1 table2 joinSpec
-   in return $ Table (primaryKeys tableLeftMid) (indexName tableLeftMid) (tableData tableLeftMid ++ tableData tableRight)
+   in return $ Table (primaryKeys tableLeftMid) (indexName tableLeftMid) (tableData tableLeftMid ++ tableData tableRight) -}
 
 {-
 Anything in left + anything in middle
@@ -394,6 +464,33 @@ test_evalEAgg =
 -- first do a regularization in expr -> make sure its Aggfunction free
 -- Map each row into some DValue
 -- Then Aggregate
+
+test1002 =
+  Table
+    { primaryKeys = (VarName "age", IntType 16) NE.:| [(VarName "amount", IntType 16), (VarName "country", StringType 255), (VarName "first_name", StringType 255), (VarName "item", StringType 255), (VarName "last_name", StringType 255), (VarName "order_id", IntType 16)],
+      indexName = [],
+      tableData =
+        [ fromList [(VarName "age", IntVal 25), (VarName "amount", IntVal 400), (VarName "country", StringVal "UK"), (VarName "first_name", StringVal "John"), (VarName "item", StringVal "Keyboard"), (VarName "last_name", StringVal "Reinhardt"), (VarName "order_id", IntVal 1)],
+          fromList [(VarName "age", IntVal 25), (VarName "amount", IntVal 300), (VarName "country", StringVal "UK"), (VarName "first_name", StringVal "John"), (VarName "item", StringVal "Mouse"), (VarName "last_name", StringVal "Reinhardt"), (VarName "order_id", IntVal 2)],
+          fromList [(VarName "age", IntVal 22), (VarName "amount", IntVal 12000), (VarName "country", StringVal "UK"), (VarName "first_name", StringVal "David"), (VarName "item", StringVal "Monitor"), (VarName "last_name", StringVal "Robinson"), (VarName "order_id", IntVal 3)],
+          fromList [(VarName "age", IntVal 31), (VarName "amount", IntVal 400), (VarName "country", StringVal "USA"), (VarName "first_name", StringVal "John"), (VarName "item", StringVal "Keyboard"), (VarName "last_name", StringVal "Doe"), (VarName "order_id", IntVal 4)],
+          fromList [(VarName "age", IntVal 22), (VarName "amount", IntVal 250), (VarName "country", StringVal "USA"), (VarName "first_name", StringVal "Robert"), (VarName "item", StringVal "Mousepad"), (VarName "last_name", StringVal "Luna"), (VarName "order_id", IntVal 5)],
+          fromList [(VarName "age", IntVal 28), (VarName "amount", NullVal), (VarName "country", StringVal "UAE"), (VarName "first_name", StringVal "Betty"), (VarName "item", NullVal), (VarName "last_name", StringVal "Doe"), (VarName "order_id", NullVal)]
+        ]
+    }
+
+test1003 =
+  Table
+    { primaryKeys = (VarName "age", IntType 16) NE.:| [(VarName "amount", IntType 16), (VarName "country", StringType 255), (VarName "first_name", StringType 255), (VarName "item", StringType 255), (VarName "last_name", StringType 255), (VarName "order_id", IntType 16)],
+      indexName = [],
+      tableData =
+        [ fromList [(VarName "age", IntVal 25), (VarName "amount", IntVal 400), (VarName "country", StringVal "UK"), (VarName "first_name", StringVal "John"), (VarName "item", StringVal "Keyboard"), (VarName "last_name", StringVal "Reinhardt"), (VarName "order_id", IntVal 1)],
+          fromList [(VarName "age", IntVal 25), (VarName "amount", IntVal 300), (VarName "country", StringVal "UK"), (VarName "first_name", StringVal "John"), (VarName "item", StringVal "Mouse"), (VarName "last_name", StringVal "Reinhardt"), (VarName "order_id", IntVal 2)],
+          fromList [(VarName "age", IntVal 22), (VarName "amount", IntVal 12000), (VarName "country", StringVal "UK"), (VarName "first_name", StringVal "David"), (VarName "item", StringVal "Monitor"), (VarName "last_name", StringVal "Robinson"), (VarName "order_id", IntVal 3)],
+          fromList [(VarName "age", IntVal 31), (VarName "amount", IntVal 400), (VarName "country", StringVal "USA"), (VarName "first_name", StringVal "John"), (VarName "item", StringVal "Keyboard"), (VarName "last_name", StringVal "Doe"), (VarName "order_id", IntVal 4)],
+          fromList [(VarName "age", IntVal 22), (VarName "amount", IntVal 250), (VarName "country", StringVal "USA"), (VarName "first_name", StringVal "Robert"), (VarName "item", StringVal "Mousepad"), (VarName "last_name", StringVal "Luna"), (VarName "order_id", IntVal 5)]
+        ]
+    }
 
 getInt :: DValue -> SQLI Int
 getInt (IntVal i) = return i
@@ -665,7 +762,7 @@ annotatedSelect ces pk iName =
               . (\x -> Map.singleton expr (VarName $ TP.pretty expr, x)) -}
     go ahMap aeMap (ColumnAlias expr alias) =
       case inferExprType expr ahMap of
-        Nothing -> throwError $ "Cannot infer the type of " ++ TP.pretty expr
+        Nothing -> throwError $ "Cannot infer  the type of " ++ TP.pretty expr
         Just dtype -> return $ Map.singleton expr (VarName alias, dtype) `Map.union` aeMap
 
 evalGroupBySelect1 :: [Var] -> (CountStyle, [ColumnExpression]) -> (TableName, Table) -> SQLI Table
@@ -933,7 +1030,7 @@ emptyRow = Map.empty
 emptyStore :: Store
 emptyStore = Store emptyScope Map.empty
 
-tableSampleGradesTXT = "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,Math,92\n2,English,88\n2,History,76\n3,Math,78\n3,English,95\n3,History,84\n4,Math,90\n4,English,85\n4,History,88\n5,Math,86\n5,English,92\n5,History,80"
+tableSampleGradesTXT = "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,English,88\n2,History,76\n3,Math,78"
 
 tableSampleGradesPK = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)]
 
@@ -944,9 +1041,9 @@ tableSampleGrades = case PAR.parse (TPAR.tableP tableSampleGradesPK tableSampleG
   Left x -> Table tableSampleGradesPK tableSampleGradesIN []
 
 -- >>> TP.pretty tableSampleGrades
--- "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,Math,92\n2,English,88\n2,History,76\n3,Math,78\n3,English,95\n3,History,84\n4,Math,90\n4,English,85\n4,History,88\n5,Math,86\n5,English,92\n5,History,80"
+-- "student_id,subject,grade\n1,Math,85\n1,English,78\n1,History,92\n2,English,88\n2,History,76\n3,Math,78"
 
-tableSampleStudentsTXT = "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
+tableSampleStudentsTXT = "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n4,Emily,Williams,Female,20"
 
 tableSampleStudentsPK = NE.fromList [(VarName "student_id", IntType 32)]
 
@@ -962,6 +1059,9 @@ minimumTableStudent = [(VarName "first_name", "")]
 -- "student_id,first_name,last_name,gender,age\n1,John,Doe,Male,20\n2,Jane,Smith,Female,21\n3,Michael,Johnson,Male,22\n4,Emily,Williams,Female,20\n5,Chris,Anderson,Male,23"
 
 tableNumber = Table (NE.fromList [(VarName "num1", IntType 32), (VarName "num2", IntType 32)]) [(VarName "num3", StringType 255)] [Map.fromList [(VarName "num1", IntVal 1), (VarName "num2", IntVal 1), (VarName "num3", StringVal "a")]]
+
+-- >>> TP.pretty tableNumber
+-- "num1,num2,num3\n1,1,a"
 
 sampleStore :: Store
 sampleStore = Store (Map.fromList [("Students", tableSampleStudents), ("Grades", tableSampleGrades), ("Number", tableNumber)]) Map.empty
@@ -1230,58 +1330,6 @@ lengthGroupBy :: GroupBy a -> Int
 lengthGroupBy (SingleGroupBy _) = 1
 lengthGroupBy (MultiGroupBy _ vs) = 1 + lengthGroupBy vs
  -}
-
-test1000 = interp (evalFrom (Join (TableRef "Students") InnerJoin (TableRef "Grades") [(Dot "Students" (VarName "student_id"), Dot "Grades" (VarName "student_id"))])) sampleStore
-
-test1003 = TP.pretty test1002
-
-test1004 = putStrLn test1003
-
-test1002 =
-  Table
-    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
-      indexName = [(VarName "age", IntType 32), (VarName "first_name", StringType 255), (VarName "gender", StringType 255), (VarName "grade", IntType 32), (VarName "last_name", StringType 255)],
-      tableData =
-        [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 95), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 84), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 90), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 86), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 80), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "History")]
-        ]
-    }
-
-test1001 =
-  Table
-    { primaryKeys = NE.fromList [(VarName "student_id", IntType 32), (VarName "subject", StringType 255)],
-      indexName = [(VarName "age", IntType 32), (VarName "first_name", StringType 255), (VarName "gender", StringType 255), (VarName "grade", IntType 32), (VarName "last_name", StringType 255)],
-      tableData =
-        [ Map.fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
-          Map.fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
-          Map.fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
-          Map.fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "Math")],
-          Map.fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
-          Map.fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 95), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 22), (VarName "first_name", StringVal "Michael"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 84), (VarName "last_name", StringVal "Johnson"), (VarName "student_id", IntVal 3), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 90), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "Emily"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Williams"), (VarName "student_id", IntVal 4), (VarName "subject", StringVal "History")],
-          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 86), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "Math")],
-          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "English")],
-          fromList [(VarName "age", IntVal 23), (VarName "first_name", StringVal "Chris"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 80), (VarName "last_name", StringVal "Anderson"), (VarName "student_id", IntVal 5), (VarName "subject", StringVal "History")]
-        ]
-    }
 
 {- test1002 = TP.pretty test1001 -}
 

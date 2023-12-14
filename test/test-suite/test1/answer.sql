@@ -1,10 +1,10 @@
 CREATE TABLE answer
 (
   order_id INTEGER PRIMARY KEY,
-  item VARCHAR (255),
-  amount INTEGER,
-  first_name VARCHAR(255),
-  last_name VARCHAR(255),
-  age INTEGER,
-  country VARCHAR(255)
+  item VARCHAR (255) PRIMARY KEY,
+  amount INTEGER PRIMARY KEY,
+  first_name VARCHAR(255) PRIMARY KEY,
+  last_name VARCHAR(255) PRIMARY KEY,
+  age INTEGER PRIMARY KEY,
+  country VARCHAR(255) PRIMARY KEY
 );

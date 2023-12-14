@@ -60,7 +60,7 @@ data OutputLoc
   = File FilePath
   | Terminal
 
-testedit = "  "
+testedit = "    "
 
 getStack :: IOS Stack
 getStack = do gets stack
