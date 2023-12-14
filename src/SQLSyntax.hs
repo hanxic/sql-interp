@@ -42,7 +42,7 @@ data ColumnExpression
 data CountStyle
   = Distinct
   | All
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 type TableName = String
 
@@ -69,7 +69,7 @@ data Expression
   | Op2 Expression Bop Expression -- e.g. A + 2
   | AggFun AggFunction CountStyle Expression -- e.g. SUM / AVG
   | Fun Function Expression
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 data Var
   = VarName Name
@@ -84,7 +84,7 @@ data Var
 data Uop
   = Not
   | Neg
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data Bop
   = Plus
@@ -101,7 +101,7 @@ data Bop
   | Or
   | Like
   | Is
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data AggFunction
   = Avg
@@ -109,13 +109,13 @@ data AggFunction
   | Max
   | Min
   | Sum
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data Function
   = Len
   | Lower
   | Upper
-  deriving (Eq, Show, Enum, Bounded)
+  deriving (Eq, Show, Enum, Bounded, Ord)
 
 data DType
   = StringType Int
