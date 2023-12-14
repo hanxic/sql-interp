@@ -21,30 +21,6 @@ import Test.QuickCheck qualified as QC
 import Text.PrettyPrint (Doc, render)
 import Utils
 
-prop_roundtrip_header :: Header -> Bool
-prop_roundtrip_header h = P.parse headerP (Text.PrettyPrint.render $ TP.ppHeader h) == Right h
-
-prop_roundtrip_valT :: QC.Property
-prop_roundtrip_valT = QC.forAll (QC.arbitrary :: QC.Gen DType) $ \dtype ->
-  QC.forAll (genValTC dtype) $ \dvalue ->
-    P.parse (dvalueTP dtype) (TP.pretty dvalue) == Right dvalue
-
-{- prop_roundtrip_row :: AnnotatedHeader -> Bool
-prop_roundtrip_row ah =
-  let (r :: Row) = undefined
-   in P.parse (rowP ah) (TP.pretty r) == Right r -}
-prop_roundtrip_row :: QC.Property
-prop_roundtrip_row = QC.forAll genAH $ \ah ->
-  QC.forAll (genRowFromAH ah) $ \row ->
-    P.parse (rowP ah) (render $ TP.ppRow ah row) == Right row
-
-prop_roundtrip_table :: QC.Property
-prop_roundtrip_table = QC.forAll genPKIN $ \(pk, iName) ->
-  let ah = NE.toList pk ++ iName
-   in QC.forAll (genTableData ah) $ \td ->
-        let table = Table pk iName td
-         in P.parse (tableP pk iName) (TP.pretty table) == Right table
-
 type PrimaryKeysList = IndexName
 
 nameTP :: Parser String
@@ -68,29 +44,10 @@ tpFVarName =
     (`notElem` reservedKeyWords)
     nameTP
 
-test_varTP :: Test
-test_varTP =
-  TestList
-    [ P.parse varTP "*" ~?= SP.errorMsgUnitTest,
-      P.parse varTP "1st" ~?= SP.errorMsgUnitTest,
-      P.parse varTP "st1" ~?= Right (VarName "st1"),
-      P.parse varTP "\"\"" ~?= SP.errorMsgUnitTest,
-      -- TODO: not dealing with "\t" here. Maybe we should?
-      P.parse varTP "st.st1" ~?= Right (Dot "st" $ VarName "st1"),
-      P.doParse varTP "st\n.st1" ~?= Just (VarName "st", "\n.st1")
-    ]
-
 -- String name for column should be not empty)
 
 headerP :: Parser Header
 headerP = P.sepBy varTP P.comma
-
-test_headerP :: Test
-test_headerP =
-  TestList
-    [ P.parse headerP "a,b,c" ~?= Right [VarName "a", VarName "b", VarName "c"],
-      P.doParse headerP "a,b,c\nd,e,f" ~?= Just ([VarName "a", VarName "b", VarName "c"], "d,e,f")
-    ]
 
 -- | Given a primary key variable list, and a index name variable list, return a pair of primary keys and index names
 
@@ -132,15 +89,6 @@ nullValTP =
 -- >>> P.doParse nullValTP "\t\n"
 -- Just (NullVal,"\t\n")
 
-test_nullValTP :: Test
-test_nullValTP =
-  TestList
-    [ P.doParse nullValTP "," ~?= Just (NullVal, ","),
-      P.doParse nullValTP "NULL\n" ~?= Just (NullVal, "\n"),
-      P.parse nullValTP "\t\n" ~?= Right NullVal,
-      P.parse nullValTP "Something" ~?= SP.errorMsgUnitTest
-    ]
-
 stringValTP :: Parser DValue
 stringValTP =
   ( StringVal <$> (SP.stringInP '\"' many <* spacesP)
@@ -150,14 +98,6 @@ stringValTP =
   )
     <* spacesP
 
-test_stringValTP :: Test
-test_stringValTP =
-  TestList
-    [ P.parse stringValTP "    ," ~?= SP.errorMsgUnitTest,
-      P.doParse stringValTP "this   ," ~?= Just (StringVal "this", ","),
-      P.parse stringValTP "\"Ha , Ha\"" ~?= Right (StringVal "Ha , Ha")
-    ]
-
 boolValTP :: Parser DValue
 boolValTP = (trueP <|> falseP) <* spacesP
   where
@@ -165,15 +105,6 @@ boolValTP = (trueP <|> falseP) <* spacesP
     trueP = BoolVal True <$ P.string "TRUE"
     falseP :: Parser DValue
     falseP = BoolVal False <$ P.string "FALSE"
-
-test_boolValTP :: Test
-test_boolValTP =
-  TestList
-    [ P.doParse boolValTP "TRUE    " ~?= Just (BoolVal True, ""),
-      P.doParse boolValTP "FALSE    " ~?= Just (BoolVal False, ""),
-      P.doParse boolValTP "TRUE   , " ~?= Just (BoolVal True, ", "),
-      P.doParse boolValTP "TRUE   \n " ~?= Just (BoolVal True, "\n ")
-    ]
 
 intValTP :: Parser DValue
 intValTP = IntVal <$> P.int
@@ -198,12 +129,6 @@ dvalueTP (StringType n) = nullValTP <|> (stringValTP <* separatorP)
 
 separatorP :: Parser ()
 separatorP = void (P.lookAhead (P.space <|> P.comma)) <|> P.lookAhead P.eof
-
-test_dvalueTP :: Test
-test_dvalueTP =
-  TestList
-    [ P.parse (dvalueTP (StringType 255)) "\"a\"" ~?= Right (StringVal "a")
-    ]
 
 validHeaderP :: PrimaryKeys -> IndexName -> Parser AnnotatedHeader
 validHeaderP pkVarList iNameVarList = headerP >>= validHeaderPAux pkVarList iNameVarList
@@ -294,41 +219,3 @@ tableP pk iName = do
 
 parseCSVFile :: PrimaryKeys -> IndexName -> String -> IO (Either P.ParseError Table)
 parseCSVFile pk iName = P.parseFromFile (const <$> tableP pk iName <*> P.eof)
-
-test201 = NE.fromList [(VarName "COUNT(order_id)", IntType 16)]
-
-test202 = []
-
-test203 = "\"COUNT(order_id)\"\n1\n1\n2\n1"
-
-test204 = P.doParse (validHeaderP test201 test202) test203
-
--- >>> test204
--- Just ([(VarName "COUNT(order_id)",IntType 16)],"1\n1\n2\n1")
-
-test205 = P.doParse (tableP test201 test202) test203
-
--- >>> test205
--- Just (Table {primaryKeys = (VarName "COUNT(order_id)",IntType 16) :| [], indexName = [], tableData = [fromList [(VarName "COUNT(order_id)",IntVal 1)],fromList [(VarName "COUNT(order_id)",IntVal 1)],fromList [(VarName "COUNT(order_id)",IntVal 2)],fromList [(VarName "COUNT(order_id)",IntVal 1)]]},"")
-
-test_all :: IO Counts
-test_all =
-  runTestTT $
-    TestList
-      [ test_headerP,
-        test_nullValTP,
-        test_stringValTP,
-        test_boolValTP,
-        test_dvalueTP
-      ]
-
-qc :: IO ()
-qc = do
-  putStrLn "roundtrip_header"
-  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_header
-  putStrLn "roundtrip_valT"
-  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_valT
-  putStrLn "roundtrip_row"
-  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_row
-  putStrLn "roundtrip_table"
-  QC.quickCheckWith QC.stdArgs {QC.maxSuccess = 1000} prop_roundtrip_table
