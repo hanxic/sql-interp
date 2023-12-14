@@ -3,9 +3,11 @@ module TestInterpretation where
 import Control.Monad (foldM)
 import Control.Monad.Except
 import Control.Monad.State
+import Data.List qualified as List
 import Data.List qualified as List (sort)
 import Data.List.NonEmpty qualified as NE (fromList, sort)
-import Data.Map qualified as Map (lookup)
+import Data.Map
+import Data.Map qualified as Map (empty, fromList, lookup, singleton, union)
 import Interpretation
 import Parser qualified as P
 import SQLParser qualified as SPAR
@@ -16,6 +18,7 @@ import TableParser qualified as TPAR
 import TablePrinter qualified as TP
 import TableSyntax
 import Test.HUnit
+import TestUtils
 
 type IOS a = StateT IOStore IO a
 
@@ -212,7 +215,7 @@ runTestCases = do
 -- loadTest
 testcases :: [(FilePath, String, String, String)]
 testcases =
-  map
+  List.map
     (\(x1, x2, x3, x4) -> (testPath </> x1, x2, x3, x4))
     [ ("test1", "answer", "answer", "test1"),
       ("test2", "answer", "answer", "test2"),
@@ -224,50 +227,97 @@ testcases =
       ("test8", "answer", "answer", "test8")
     ]
 
-{- loadSetupFile :: IO (Maybe Queries)
-loadSetupFile = do
-  errOScripts <- SPAR.parseSQLFile (setupPath ++ setupSQL)
-  filePath <- getCurrentDirectory
-  putStrLn filePath
-  case errOScripts of
-    Left errMsg -> putStrLn errMsg >> return Nothing
-    Right qs -> return $ Just qs
+-------- Unit Testing
+test_evalFrom :: Test
+test_evalFrom =
+  "evaluate From" ~:
+    TestList
+      [ interp (evalFrom (TableRef "Students")) sampleStore ~?= Right ("Students", tableSampleStudents),
+        interp (evalFrom (TableRef "bla")) sampleStore ~?= Left "No Table for table reference: bla",
+        interp (evalFrom (TableAlias "Students" "Student1")) sampleStore ~?= Right ("Student1", tableSampleStudents),
+        execState (runExceptT (evalFrom (TableAlias "Students" "Student1"))) sampleStore ~?= Store (scope sampleStore) (alias sampleStore `Map.union` Map.singleton "Student1" "Students"),
+        interp (evalFrom (TableAlias "bla" "Student1")) sampleStore ~?= Left "No Table for table alias: bla AS Student1"
+      ]
 
-loadSetupStore :: Store -> IO (Maybe Store)
-loadSetupStore store = do
-  baseQueries <- loadSetupFile
-  case baseQueries of
-    Nothing -> return Nothing
-    Just qs -> return $ Just $ exec (eval qs) store
+testJoinMidRes1 =
+  [ fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 85), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "Math")],
+    fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 78), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "English")],
+    fromList [(VarName "age", IntVal 20), (VarName "first_name", StringVal "John"), (VarName "gender", StringVal "Male"), (VarName "grade", IntVal 92), (VarName "last_name", StringVal "Doe"), (VarName "student_id", IntVal 1), (VarName "subject", StringVal "History")],
+    fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 88), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "English")],
+    fromList [(VarName "age", IntVal 21), (VarName "first_name", StringVal "Jane"), (VarName "gender", StringVal "Female"), (VarName "grade", IntVal 76), (VarName "last_name", StringVal "Smith"), (VarName "student_id", IntVal 2), (VarName "subject", StringVal "History")]
+  ]
 
-loadSetupTable :: Store -> IO Store
-loadSetupTable store = do
-  foldM go store setupCSVs
-  where
-    go :: Store -> String -> IO Store
-    go store tablename =
-      case interp (getTable tablename) store of
-        Left errMsg -> putStrLn errMsg >> return store
-        Right Nothing -> putStrLn "Cannot find table" >> return store
-        Right (Just (_, Table pk iName _)) ->
-          do
-            errOTable <- SPAR.parseCSVFile pk iName (setupPath ++ tablename ++ csvformat)
-            case errOTable of
-              Left errMsgTable -> putStrLn errMsgTable >> return store
-              Right table ->
-                case interp (setScope tablename table) store of
-                  Left errMsgSet -> putStrLn errMsgSet >> return store
-                  Right newStore -> return newStore
+test_joinMid :: Test
+test_joinMid =
+  "evaluate Op2" ~:
+    TestList
+      [ interp (joinMid (tableData tableSampleGrades) (tableData tableSampleStudents) <$> getJoinSpec "Students" "Grades" [(Dot "Students" $ VarName "student_id", Dot "Grades" $ VarName "student_id")]) sampleStore ~?= Right testJoinMidRes1
+      ]
 
-loadSetup :: IO (Maybe Store)
-loadSetup = do
-  baseStore <- loadSetupStore emptyStore
-  case baseStore of
-    Nothing -> return Nothing
-    Just store -> Just <$> loadSetupTable store -}
+test_weakCast :: Test
+test_weakCast =
+  TestList
+    [ interp (weakCast (IntVal 0) (IntType 1)) sampleStore ~?= Right (IntVal 0),
+      interp (weakCast (IntVal 8) (IntType 4)) sampleStore ~?= Right (IntVal 8),
+      interp (weakCast (BoolVal True) (IntType 3)) sampleStore ~?= Right (IntVal 1),
+      interp (weakCast (StringVal "bbb") (IntType 3)) sampleStore ~?= interp (throwCastError (StringVal "bbb") (IntType 3)) sampleStore
+    ]
 
-{-     go :: Store -> String -> IO Store
-go store tablename =
-  alterStoreIO (getTable tablename) store (
-    \(_, Table pk iName _) ->
-  )-}
+test_evaluateOp2 :: Test
+test_evaluateOp2 =
+  "evaluate Op2" ~:
+    TestList
+      [ interp (evalE (Op2 (Val NullVal) Eq (Val NullVal)) Map.empty) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Val $ IntVal 3) Eq (Val (IntVal 3))) Map.empty) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) Map.empty) sampleStore ~?= Right (BoolVal False),
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) Map.empty) sampleStore ~?= Right NullVal,
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (StringVal "what"))) sampleStore ~?= Left "Illegal Casting into INT(64): 'what'",
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (IntVal 1))) sampleStore ~?= Right (IntVal 2),
+        interp (evalE (Op2 (Var $ VarName "student_id") Plus (Val $ IntVal 1)) (Map.singleton (VarName "student_id") (BoolVal False))) sampleStore ~?= Right (IntVal 1),
+        interp (evalE (Op2 (Var $ VarName "student_id") Like (Val $ StringVal "Hi")) (Map.singleton (VarName "student_id") (StringVal "Hi"))) sampleStore ~?= Right (BoolVal True),
+        interp (evalE (Op2 (Var $ VarName "student_id") Like (Val $ StringVal "John[1-9]")) (Map.singleton (VarName "student_id") (StringVal "John1"))) sampleStore ~?= Right (BoolVal True)
+      ]
+
+test_evalEAgg :: Test
+test_evalEAgg =
+  TestList
+    [ interp (evalEAgg (AggFun Sum All (Var $ VarName "var1")) []) sampleStore ~?= Right (Val $ IntVal 0),
+      interp (evalEAgg (AggFun Sum All (Var $ VarName "var2")) [Map.fromList [(VarName "var1", IntVal 1)]]) sampleStore ~?= Right (Val $ IntVal 0)
+    ]
+
+test_evalOrderBy :: Test
+test_evalOrderBy =
+  TestList
+    [ interp (evalOrderBy [(VarName "student_id", Just DESC, Nothing)] tableSampleStudents) sampleStore ~?= Right (Table (primaryKeys tableSampleStudents) (indexName tableSampleStudents) (reverse $ tableData tableSampleStudents))
+    ]
+
+test_deterPK :: Test
+test_deterPK =
+  TestList
+    [ deterPK Nothing [ColumnName (Var $ VarName "order_id")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Just (NE.fromList [(VarName "order_id", IntType 16)]),
+      deterPK Nothing [ColumnName (Var $ VarName "order_id"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Just (NE.fromList [(VarName "order_id", IntType 16)]),
+      deterPK Nothing [ColumnName (Var $ VarName "name"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Nothing,
+      deterPK (Just $ VarName "name") [ColumnName (Var $ VarName "name"), ColumnName (Var $ VarName "amount")] (NE.fromList [(VarName "order_id", IntType 16)]) ~?= Nothing
+    ]
+
+test_extractPosPK :: Test
+test_extractPosPK =
+  TestList
+    [ extractPosPK (ColumnName (Var $ VarName "order_id")) (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order_id", IntType 16))],
+      extractPosPK (ColumnAlias (Var $ VarName "order_id") "order") (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order", IntType 16))],
+      extractPosPK AllVar (Map.fromList [(VarName "order_id", IntType 16), (VarName "amount", IntType 32)]) ~?= Map.fromList [(VarName "order_id", (VarName "order_id", IntType 16)), (VarName "amount", (VarName "amount", IntType 32))]
+    ]
+
+test_all :: IO Counts
+test_all =
+  runTestTT $
+    TestList
+      [ test_evalFrom,
+        test_joinMid,
+        test_weakCast,
+        test_evaluateOp2,
+        test_evalEAgg,
+        test_evalOrderBy,
+        test_deterPK,
+        test_extractPosPK
+      ]

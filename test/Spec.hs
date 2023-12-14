@@ -19,12 +19,14 @@ main = do
   TestTable.test_all
   putStrLn "Property-Based Testing for Table Parser / Printer"
   TestTable.qc
-  putStrLn "SQL-Interp Test suites "
-  testProgram
+  putStrLn "Unit Testing for Interpretation"
+  TestInterpretation.test_all
   putStrLn "Unit Testing for Optimization"
   TestOptimization.test_all
   putStrLn "Property-Based Testing for Optimization"
   TestOptimization.qc
+  putStrLn "SQL-Interp Test suites "
+  testProgram
 
 testProgram :: IO ()
 testProgram =
