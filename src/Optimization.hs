@@ -18,7 +18,7 @@ emptyTableRef = TableRef "emptyTableRef"
 emptySelect :: SelectCommand
 emptySelect =
   SelectCommand
-    { exprsSelect = [],
+    { exprsSelect = (All, []),
       fromSelect = emptyTableRef,
       whSelect = Nothing,
       groupbySelect = [],
@@ -30,7 +30,7 @@ emptySelect =
 idSelect :: FromExpression -> SelectCommand
 idSelect f =
   SelectCommand
-    { exprsSelect = [(All, AllVar)],
+    { exprsSelect = (All, [AllVar]),
       fromSelect = f,
       whSelect = Nothing,
       groupbySelect = [],
@@ -39,20 +39,21 @@ idSelect f =
       offsetSelect = Nothing
     }
 
-singletonSelect :: CountStyle -> ColumnExpression -> SelectCommand
-singletonSelect st ce = insertSelect st ce emptySelect
+singletonSelect :: ColumnExpression -> SelectCommand
+singletonSelect ce = insertSelect ce emptySelect
 
-insertSelect :: CountStyle -> ColumnExpression -> SelectCommand -> SelectCommand
-insertSelect st ce sc =
-  sc
-    { exprsSelect = (st, ce) : exprsSelect sc
-    }
+insertSelect :: ColumnExpression -> SelectCommand -> SelectCommand
+insertSelect ce sc =
+  let newColExpr = ce : snd (exprsSelect sc)
+   in sc
+        { exprsSelect = (fst (exprsSelect sc), newColExpr)
+        }
 
 fromList :: [ColumnExpression] -> SelectCommand
-fromList = List.foldr (insertSelect All) emptySelect
+fromList = List.foldr insertSelect emptySelect
 
 getColExprs :: SelectCommand -> [ColumnExpression]
-getColExprs = List.map snd . exprsSelect
+getColExprs = snd . exprsSelect
 
 -- Command Checkers
 
@@ -71,15 +72,11 @@ hasAllVarCol :: ColumnExpression -> Bool
 hasAllVarCol AllVar = True
 hasAllVarCol _ = False
 
-hasWhere :: SelectCommand -> Bool
-hasWhere = isJust . whSelect
-
 hasJoin :: SelectCommand -> Bool
 hasJoin = hasJoinFrom . fromSelect
 
 hasJoinFrom :: FromExpression -> Bool
 hasJoinFrom Join {} = True
-hasJoinFrom (SubQuery sc) = hasJoin sc
 hasJoinFrom _ = False
 
 joinRefs :: SelectCommand -> [TableName]
@@ -98,8 +95,8 @@ joinRefsInner (SubQuery sc) = []
 
 -- Build map of Selected columns
 
-mapTableVars :: Scope -> Map TableName Var
-mapTableVars sc = undefined
+mapTableVars :: Scope -> Map TableName IndexName
+mapTableVars = Map.map indexName
 
 mapVarUses :: SelectCommand -> [Var]
 mapVarUses sc = List.concatMap mapVarUsesCol (getColExprs sc)
@@ -124,16 +121,45 @@ optimizeFromId sc = sc {fromSelect = checkFromId (fromSelect sc)}
 
 checkFromId :: FromExpression -> FromExpression
 checkFromId (SubQuery sc) | sc == idSelect (fromSelect sc) = fromSelect sc
-checkFromId (SubQuery sc) = checkFromId (fromSelect sc)
 checkFromId f = f
 
 optimizeWhereJoin :: SelectCommand -> SelectCommand
 optimizeWhereJoin sc
-  | hasJoin sc && hasWhere sc =
+  | hasJoin sc =
       sc
-        { whSelect = Nothing
+        { whSelect = Nothing,
+          fromSelect = unpackPushWhere (whSelect sc) (fromSelect sc)
         }
 optimizeWhereJoin sc = sc
+
+unpackPushWhere :: Maybe Expression -> FromExpression -> FromExpression
+unpackPushWhere Nothing f = f
+unpackPushWhere (Just e) f = pushDownWhere (mapVarUsesExpr e) e f
+
+pushDownWhere :: [Var] -> Expression -> FromExpression -> FromExpression
+pushDownWhere [] _ f = f
+pushDownWhere vs e (TableRef n)
+  | varsMatchName n vs =
+      SubQuery $
+        (idSelect (TableRef n))
+          { whSelect = Just e
+          }
+pushDownWhere vs e (TableAlias n a)
+  | varsMatchName a vs =
+      SubQuery $
+        (idSelect (TableAlias n a))
+          { whSelect = Just e
+          }
+pushDownWhere vs e (SubQuery sc) = pushDownWhere vs e (fromSelect sc)
+pushDownWhere vs e (Join f1 s f2 n) = Join (pushDownWhere vs e f1) s (pushDownWhere vs e f2) n
+pushDownWhere _ _ f = f
+
+varsMatchName :: Name -> [Var] -> Bool
+varsMatchName n = all (varMatchName n)
+
+varMatchName :: Name -> Var -> Bool
+varMatchName n (Dot t v) = n == t
+varMatchName _ _ = False
 
 optimizeMultiJoin :: SelectCommand -> SelectCommand
 optimizeMultiJoin sc =
@@ -144,13 +170,23 @@ optimizeMultiJoin sc =
 
 -- Main optimization
 
-runOptimization :: SelectCommand -> SelectCommand
-runOptimization = optimizeMultiJoin . optimizeWhereJoin . optimizeFromId
+runOptimization :: (SelectCommand -> SelectCommand) -> SelectCommand -> SelectCommand
+runOptimization opt sc = opt $ sc {fromSelect = runFromExprOpt opt (fromSelect sc)}
+
+runFromExprOpt :: (SelectCommand -> SelectCommand) -> FromExpression -> FromExpression
+runFromExprOpt opt (SubQuery sc) = SubQuery $ runOptimization opt sc
+runFromExprOpt _ f = f
+
+optimzationList :: [SelectCommand -> SelectCommand]
+optimzationList = [optimizeMultiJoin, optimizeWhereJoin, optimizeFromId]
+
+mainOptimization :: SelectCommand -> SelectCommand
+mainOptimization = undefined
 
 -- Property-based Testing
 
 checkEval :: SelectCommand -> SelectCommand -> Bool
-s1 `checkEval` s2 = interp (evalSelect s1) sampleStore == interp (evalSelect s2) sampleStore
+s1 `checkEval` s2 = interp (evalSelectCommand s1) sampleStore == interp (evalSelectCommand s2) sampleStore
 
 prop_optimizeFromId :: SelectCommand -> Bool
 prop_optimizeFromId sc = optimizeFromId sc `checkEval` sc
@@ -166,7 +202,7 @@ prop_optimizeMultiJoin sc = optimizeMultiJoin sc `checkEval` sc
 sampleQuery :: SelectCommand
 sampleQuery =
   SelectCommand
-    { exprsSelect = [(All, AllVar)],
+    { exprsSelect = (All, [AllVar]),
       fromSelect = TableRef "Students",
       whSelect = Nothing,
       groupbySelect = [],
@@ -178,8 +214,42 @@ sampleQuery =
 sampleQueryUnopt :: SelectCommand
 sampleQueryUnopt =
   SelectCommand
-    { exprsSelect = [(All, AllVar)],
+    { exprsSelect = (All, [AllVar]),
       fromSelect = SubQuery sampleQuery,
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+sampleQuerySuperUnopt :: SelectCommand
+sampleQuerySuperUnopt =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "last_name"
+          ]
+        ),
+      fromSelect = SubQuery sampleQueryUnopt,
+      whSelect = Nothing,
+      groupbySelect = [],
+      orderbySelect = [],
+      limitSelect = Nothing,
+      offsetSelect = Nothing
+    }
+
+sampleNoOpt :: SelectCommand
+sampleNoOpt =
+  SelectCommand
+    { exprsSelect =
+        ( All,
+          [ ColumnName $ Var $ VarName "first_name",
+            ColumnName $ Var $ VarName "last_name"
+          ]
+        ),
+      fromSelect = TableRef "Students",
       whSelect = Nothing,
       groupbySelect = [],
       orderbySelect = [],
@@ -191,6 +261,11 @@ test_optimizeFromId :: Test
 test_optimizeFromId =
   "optimize From Id"
     ~: TestList
-      [ interp (evalSelect sampleQueryUnopt) sampleStore ~?= interp (evalSelect $ optimizeFromId sampleQueryUnopt) sampleStore,
-        interp (evalSelect sampleQueryUnopt) sampleStore ~?= interp (evalSelect $ optimizeFromId sampleQueryUnopt) sampleStore
+      [ interp (evalSelectCommand sampleQueryUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleQueryUnopt) sampleStore,
+        sampleQuery ~?= optimizeFromId sampleQueryUnopt,
+        interp (evalSelectCommand sampleQuerySuperUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleQuerySuperUnopt) sampleStore,
+        sampleQuery ~?= optimizeFromId sampleQuerySuperUnopt,
+        interp (evalSelectCommand sampleNoOpt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleNoOpt) sampleStore,
+        sampleNoOpt ~?= optimizeFromId sampleQueryUnopt
       ]
+

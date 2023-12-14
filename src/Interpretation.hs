@@ -39,9 +39,8 @@ import Test.QuickCheck qualified as QC
 import Test.QuickCheck.Gen.Unsafe qualified as QCGU
 import Text.Printf (FieldFormat (FieldFormat))
 import Text.Read (readMaybe)
-
--- import Text.Regex.Base qualified as REGEX
--- import Text.Regex.Posix qualified as POSIX ((=~))
+import Text.Regex.Base qualified as REGEX
+import Text.Regex.Posix qualified as POSIX ((=~))
 
 {- import Test.QuickCheck.Monadic qualified as QCM -}
 
@@ -434,8 +433,8 @@ evalOp2 bop dval1 dval2 =
 
 test_evaluateOp2 :: Test
 test_evaluateOp2 =
-  "evaluate Op2" ~:
-    TestList
+  "evaluate Op2"
+    ~: TestList
       [ interp (evalE (Op2 (Val NullVal) Eq (Val NullVal)) Map.empty) sampleStore ~?= Right (BoolVal True),
         interp (evalE (Op2 (Val $ IntVal 3) Eq (Val (IntVal 3))) Map.empty) sampleStore ~?= Right (BoolVal True),
         interp (evalE (Op2 (Val $ StringVal "CIS") Eq (Val $ StringVal "CI")) Map.empty) sampleStore ~?= Right (BoolVal False),

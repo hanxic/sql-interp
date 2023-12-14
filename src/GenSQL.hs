@@ -26,8 +26,10 @@ genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
 genTest :: Gen String
 genTest = return "'"
 
+escape' :: [Char] -> [Char]
 escape' = filter (`notElem` reservedChar)
 
+test1000 :: Gen [Char]
 test1000 = escape' <$> genTest
 
 genStringLit :: Gen String
@@ -40,6 +42,7 @@ genStringLit = escape <$> QC.listOf (QC.elements stringLitChars)
 
 {- Arbitrary instances for nontrivial types -}
 instance Arbitrary DValue where
+  arbitrary :: Gen DValue
   arbitrary =
     QC.frequency
       [ (1, IntVal <$> arbitrary),
@@ -69,16 +72,18 @@ genVarWOAllVar =
     ] -}
 
 genVar :: Int -> Gen Var
-genVar n | n <= 0 = return $ VarName ("var" ++ show n)
-genVar n =
-  QC.frequency
-    [ (1, return $ VarName ("var" ++ show n)),
-      (n', Dot ("table" ++ show n) <$> genVar n')
-    ]
-  where
-    n' = n `div` 2
+genVar n = return $ VarName ("var" ++ show n)
+
+-- genVar n =
+--   QC.frequency
+--     [ (1, return $ VarName ("var" ++ show n)),
+--       (n', return $ Dot ("table" ++ show n) ("var" ++ show n))
+--     ]
+--   where
+--     n' = n `div` 2
 
 instance Arbitrary Var where
+  arbitrary :: Gen Var
   arbitrary = do
     n <- QC.sized (\x -> QC.chooseInt (1, x))
     {- QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)] -}
@@ -115,6 +120,7 @@ genStringType :: Gen DType
 genStringType = StringType <$> QC.chooseInt (1, 255) --- Temporary value
 
 instance Arbitrary DType where
+  arbitrary :: Gen DType
   arbitrary =
     QC.frequency
       [ (1, genStringType),
@@ -157,6 +163,7 @@ genExp n =
         [(1, Var <$> arbitrary), (1, Val <$> genValTC t)]
 
 instance Arbitrary Expression where
+  arbitrary :: Gen Expression
   arbitrary = QC.sized genExp
 
 -- Scratch paper for function instance
@@ -189,12 +196,14 @@ genFromExpression n =
 
 {-       (1, SubQuery <$> arbitrary),-}
 instance Arbitrary FromExpression where
+  arbitrary :: Gen FromExpression
   arbitrary = do
     n <- QC.sized (\x -> QC.chooseInt (1, x))
     {- QC.frequency [(n, QC.sized genFromExpression), (5, SubQuery <$> arbitrary)] -}
     QC.sized genFromExpression
 
 instance Arbitrary ColumnExpression where
+  arbitrary :: Gen ColumnExpression
   arbitrary =
     QC.frequency
       [ (1, ColumnName <$> (arbitrary >>= patchWVar)),
@@ -247,6 +256,7 @@ genSelectCommand n =
   where
     n' = n `div` 2
 
+test232 :: Gen [(CountStyle, ColumnExpression)]
 test232 = atLeastN 1 (arbitrary :: Gen (CountStyle, ColumnExpression))
 
 -- >>> QC.sample test232
@@ -257,6 +267,7 @@ test17 = show [1, 2, 3]
 -- "[1,2,3]"
 
 instance Arbitrary SelectCommand where
+  arbitrary :: Gen SelectCommand
   arbitrary =
     QC.sized genSelectCommand
 
@@ -266,6 +277,7 @@ atLeastN i g = do
   constrainSize1 n g
 
 instance Arbitrary CreateCommand where
+  arbitrary :: Gen CreateCommand
   arbitrary =
     CreateCommand
       <$> arbitrary
@@ -280,12 +292,14 @@ instance Arbitrary CreateCommand where
         )
 
 instance Arbitrary DeleteCommand where
+  arbitrary :: Gen DeleteCommand
   arbitrary =
     DeleteCommand
       <$> (QC.elements =<< genTablePool)
       <*> arbitrary
 
 instance Arbitrary Query where
+  arbitrary :: Gen Query
   arbitrary =
     QC.frequency
       [ (1, SelectQuery <$> arbitrary),
@@ -344,38 +358,53 @@ genTableData ah = QC.sized $ genTableDataAux ah
       return $ row : rest
 
 instance Arbitrary PrimaryKeys where
-  arbitrary = undefined
+  arbitrary :: Gen PrimaryKeys
+  arbitrary = do
+    v <- arbitrary :: Gen Var
+    t <- arbitrary :: Gen DType
+    return $ NE.singleton (v, t)
 
 instance Arbitrary Table where
+  arbitrary :: Gen Table
   arbitrary = Table <$> arbitrary <*> genIndexName <*> arbitrary
 
 instance Arbitrary Store where
+  arbitrary :: Gen Store
   arbitrary = Store <$> arbitrary <*> arbitrary
 
 {- Arbitrary bounded enum instances -}
 instance Arbitrary OrderTypeFL where
+  arbitrary :: Gen OrderTypeFL
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary OrderTypeAD where
+  arbitrary :: Gen OrderTypeAD
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Function where
+  arbitrary :: Gen Function
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary AggFunction where
+  arbitrary :: Gen AggFunction
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Bop where
+  arbitrary :: Gen Bop
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary Uop where
+  arbitrary :: Gen Uop
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary JoinStyle where
+  arbitrary :: Gen JoinStyle
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary CountStyle where
+  arbitrary :: Gen CountStyle
   arbitrary = QC.arbitraryBoundedEnum
 
 instance Arbitrary IndexAttribute where
+  arbitrary :: Gen IndexAttribute
   arbitrary = QC.arbitraryBoundedEnum
