@@ -142,17 +142,14 @@ satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = filter p get
 
 -- | Parsers for specific sorts of characters
-alpha, digit, upper, lower, space, underscore :: Parser Char
+alpha, digit, upper, lower, space, underscore, comma, equalSign :: Parser Char
 alpha = satisfy isAlpha
 digit = satisfy isDigit
 upper = satisfy isUpper
 lower = satisfy isLower
 space = satisfy isSpace
 underscore = char '_'
-
 comma = char ','
-
-equalSign :: Parser Char
 equalSign = char '='
 
 -- | Parses and returns the specified character
@@ -160,9 +157,12 @@ equalSign = char '='
 char :: Char -> Parser Char
 char c = satisfy (c ==)
 
+-- | A helper function for readding any characters that is not space and
+-- printable
 anyChar :: Parser Char
 anyChar = filter (not . isSpace) (satisfy isPrint)
 
+-- | A helper function for reading a word
 anyWord :: Parser String
 anyWord = some anyChar
 
@@ -176,18 +176,16 @@ charCI c = satisfy (\c' -> toLower c == c' || toUpper c == c')
 string :: String -> Parser String
 string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
 
--- | Look ahead
+-- | Look ahead will check if the "alive" characters is what the parser wants,
+-- but will not do any parsing
 lookAhead :: Parser a -> Parser a
 lookAhead p = P $ \s -> do
   (c, cs) <- doParse p s
   return (c, s)
 
-{- maybeParse :: Parser a -> Parser a -> Parser a
-maybeParse p1 pDefault =
-  p1 <|> pDefault
- -}
-{- (lookAhead p1 *> p1) <|> pDefault -}
-
+-- | A helper function for generating a maybe type
+-- Given two parser, one will generate a b type, and another will incur default
+-- type which is Nothing
 maybeParse :: Parser a -> Parser b -> Parser a -> Parser (Maybe b)
 maybeParse p1 pRet pDefault =
   (p1 *> (Just <$> pRet)) <|> pDefault *> pure Nothing
@@ -200,8 +198,6 @@ endOfWord = lookAhead (space *> pure () <|> eof)
 -- Succeeds only if the input is the given string and nothing more
 fullString :: String -> Parser String
 fullString str = string str <* endOfWord
-
--- | Parses and retursn the specified string and follow by nothing more than a space.
 
 -- | succeed only if the input is a (positive or negative) integer
 int :: Parser Int
@@ -252,6 +248,7 @@ sepBy p sep = sepBy1 p sep <|> pure []
 sepBy1 :: Parser a -> Parser sep -> Parser [a]
 sepBy1 p sep = (:) <$> p <*> many (sep *> p)
 
+-- | Separate by a specific count (Defined and not used)
 sepByCount :: Int -> Parser a -> Parser sep -> Parser [a]
 sepByCount n p sep | n <= 0 = pure []
 sepByCount n p sep = (:) <$> p <*> (sep *> sepByCount (n - 1) p sep)

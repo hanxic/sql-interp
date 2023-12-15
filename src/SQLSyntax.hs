@@ -46,6 +46,13 @@ data CountStyle
 
 type TableName = String
 
+{-
+Users can pull data from:
+  - A reference to a named table inside the scope
+  - A reference to a table that also renames it
+  - A nested query that will result in a table
+  - A join of two tables on a given set of column tuples
+-}
 data FromExpression
   = TableRef TableName -- e.g. FROM TEST
   | TableAlias TableName TableName -- e.g. FROM A AS B
@@ -60,11 +67,20 @@ data JoinStyle
   | OuterJoin
   deriving (Eq, Show, Enum, Bounded)
 
-type JoinNames = [(Var, Var)]
+type JoinNames = [(Var, Var)] -- FROM A JOIN B ON A.1 == B.2
 
+{-
+A nested expression is either:
+  - A reference to a column name
+  - A singular value
+  - A unary operation on an expression
+  - A binary operation on two expressions
+  - An aggregation function that maps column expressions to scalars
+  - A user-defined function on an expression
+-}
 data Expression
   = Var Var -- e.g. A
-  | Val DValue
+  | Val DValue -- e.g. 2
   | Op1 Uop Expression -- e.g. NOT A
   | Op2 Expression Bop Expression -- e.g. A + 2
   | AggFun AggFunction CountStyle Expression -- e.g. SUM / AVG
@@ -72,14 +88,9 @@ data Expression
   deriving (Eq, Show, Ord)
 
 data Var
-  = VarName Name
-  | Dot Name Var
+  = VarName Name -- first_name
+  | Dot Name Var -- students.first_name
   deriving (Eq, Show, Ord)
-
--- data Var
---   = VarName Name -- Does not quoted, Must start from an alphabet and follow by int or alphabet
---   | QuotedName Name -- Quoted, can be anything
---   deriving (Eq, Show)
 
 data Uop
   = Not
@@ -118,8 +129,8 @@ data Function
   deriving (Eq, Show, Enum, Bounded, Ord)
 
 data DType
-  = StringType Int
-  | IntType Int
+  = StringType Int -- StringType 255
+  | IntType Int -- IntType 32
   | BoolType
   deriving (Eq, Show, Ord)
 
@@ -132,6 +143,9 @@ data DValue
 
 type Name = String
 
+{-
+Two ways of ordering valid values (ascending/descending) and two ways of ordering NULL values (first/last)
+-}
 data OrderTypeAD
   = ASC
   | DESC
@@ -145,8 +159,6 @@ data OrderTypeFL
 data VerbAlter
   = Add Bool
   | DropColumn Bool
-
--- No set
 
 -- **** Section for AlterTableCommand ****
 
@@ -178,7 +190,6 @@ data CreateCommand = CreateCommand
   { ifNotExists :: Bool,
     nameCreate :: TableName,
     idCreate :: [(Name, DType, Bool)]
-    -- TODO: Haven't finished
   }
   deriving (Eq, Show)
 
@@ -267,21 +278,3 @@ reservedKeyWords =
 
 reservedChar :: String
 reservedChar = "\"'()`;"
-
-{-
-What do we want to cover?
-SELECT [expression]
-FROM expression
-WHERE
-ORDER BY
-GROUP BY
-HAVING
-JOIN
--}
-{-
-Must have a select, and must have a from
-The rest are optional...Applicative
-How about Data definition statement
-+ Manipulation statement
-+ Use the exception transformer stufff
--}

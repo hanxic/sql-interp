@@ -10,6 +10,7 @@ import Data.Map qualified as Map
 import SQLSyntax
 import TableSyntax
 
+-- | A helper function to check if an expression is a base (non binary)
 isBase :: Expression -> Bool
 isBase Val {} = True
 isBase Var {} = True
@@ -18,6 +19,7 @@ isBase Fun {} = True
 isBase AggFun {} = True
 isBase _ = False
 
+-- | Precedence level of binary operator
 level :: Bop -> Int
 level Times = 20
 level Divide = 20
@@ -35,6 +37,8 @@ level And = 8
 level Or = 7
 
 ------------ Type Checker --------
+
+-- | This function will try to type check a dvalue based on a provided dtype
 dvalueTypeCheck :: DValue -> DType -> Bool
 dvalueTypeCheck NullVal _ = True
 dvalueTypeCheck (IntVal _) (IntType _) = True
@@ -42,12 +46,16 @@ dvalueTypeCheck (BoolVal _) BoolType = True
 dvalueTypeCheck (StringVal _) (StringType _) = True
 dvalueTypeCheck _ _ = False
 
+-- | This function will compare the two dtype and see if they are equivalent
 typeCheck :: DType -> DType -> Bool
 typeCheck (IntType _) (IntType _) = True
 typeCheck (StringType _) (StringType _) = True
 typeCheck BoolType BoolType = True
 typeCheck _ _ = False
 
+-- | Inferring expression type is a helper function that will try to infer the
+-- Type of an expression. If it cannot do so (e.g., "1" + 1), then the function
+-- will return maybe
 inferExprType :: Expression -> Map Var DType -> Maybe DType
 inferExprType (Var v) ahMap =
   Map.lookup v ahMap
@@ -71,6 +79,8 @@ inferExprType (Fun f expr) ahMap =
         dtypeExpr <- inferExprType expr ahMap
         if typeCheck dtypeFun dtypeExpr then return dtypeFun else Nothing
 
+-- | The function is looser than typeCheck. It tells whether two data type are
+-- implicitly castable
 castable :: DType -> DType -> Bool
 castable (IntType _) (StringType _) = False
 castable (BoolType) (StringType _) = False
@@ -78,12 +88,16 @@ castable (StringType _) (IntType _) = False
 castable (StringType _) (BoolType) = False
 castable _ _ = True
 
+-- | A helper function in inferring the underlying type of an expression that
+-- has unary operator, given the possible dtype of the expression
 inferUopType :: Uop -> Maybe DType -> Maybe DType
 inferUopType _ mdtype = do
   dtype <- mdtype
   guard (not $ castable dtype (StringType 255))
   return dtype
 
+-- | A helper function in inferring the underlying type of an expression that
+-- has a binary operator, given the possible dtype of the two expressions
 inferBopType :: Maybe DType -> Bop -> Maybe DType -> Maybe DType
 inferBopType mdtype1 bop mdtype2 | level bop >= 17 = do
   dtype1 <- mdtype1
@@ -108,16 +122,19 @@ inferBopType mdtype1 _ mdtype2 = do
   guard (castable dtype2 BoolType)
   return dtype1
 
+-- | A helper function in inferring the type of a dvalue
 inferDValueType :: DValue -> Maybe DType
 inferDValueType (IntVal _) = Just $ IntType 32
 inferDValueType (BoolVal _) = Just BoolType
 inferDValueType (StringVal _) = Just $ StringType 255
 inferDValueType NullVal = Nothing
 
+-- | A helper function in inferring the type aggregate function
 inferAggFunctionType :: AggFunction -> DType
 inferAggFunctionType f =
   IntType 32 -- TODO: Add more types when more functions are added
 
+-- | A helper function in inferring the type of the function
 inferFunctionType :: Function -> DType
 inferFunctionType f =
   IntType 32 -- TODO: Add more types when more functions are added

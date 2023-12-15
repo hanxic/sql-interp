@@ -11,6 +11,7 @@ import SQLSyntax
 import TableSyntax
 import Test.HUnit
 import Test.QuickCheck as QC
+import TestUtils
 
 -- Property-based Testing
 
@@ -101,8 +102,8 @@ sampleNoOpt =
 
 test_optimizeFromId :: Test
 test_optimizeFromId =
-  "optimize From Id"
-    ~: TestList
+  "optimize From Id" ~:
+    TestList
       [ interp (evalSelectCommand sampleQueryUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleQueryUnopt) sampleStore,
         interp (evalSelectCommand sampleQuerySuperUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleQuerySuperUnopt) sampleStore,
         interp (evalSelectCommand sampleNoOpt) sampleStore ~?= interp (evalSelectCommand $ optimizeFromId sampleNoOpt) sampleStore
@@ -215,8 +216,8 @@ sampleJoinNoOpt2 =
 
 test_optimizeWhereJoin :: Test
 test_optimizeWhereJoin =
-  "optimize Where Join"
-    ~: TestList
+  "optimize Where Join" ~:
+    TestList
       [ interp (evalSelectCommand sampleJoinUnOpt1) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinUnOpt1) sampleStore,
         interp (evalSelectCommand sampleJoinUnOpt2) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinUnOpt2) sampleStore,
         interp (evalSelectCommand sampleJoinNoOpt1) sampleStore ~?= interp (evalSelectCommand $ optimizeWhereJoin sampleJoinNoOpt1) sampleStore,
@@ -225,8 +226,8 @@ test_optimizeWhereJoin =
 
 test_optimizationMain :: Test
 test_optimizationMain =
-  "optimize Main"
-    ~: TestList
+  "optimize Main" ~:
+    TestList
       [ interp (evalSelectCommand sampleQueryUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleQueryUnopt) sampleStore,
         interp (evalSelectCommand sampleQuerySuperUnopt) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleQuerySuperUnopt) sampleStore,
         interp (evalSelectCommand sampleNoOpt) sampleStore ~?= interp (evalSelectCommand $ optimizationMain sampleNoOpt) sampleStore,
